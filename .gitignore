@@ -15,6 +15,7 @@ api-monitor/frontend/node_modules/
 api-monitor/frontend/dist/
 # frontend-maven-plugin downloads Node here
 api-monitor/node/
+api-monitor/frontend/node/
 
 # React build output 
 # Preserve the .gitkeep placeholder so the directory is tracked
