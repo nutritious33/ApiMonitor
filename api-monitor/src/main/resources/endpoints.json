@@ -1,0 +1,19 @@
+[
+  { "name": "Google Public DNS",         "url": "https://dns.google/resolve?name=google.com",                                                                        "active": true  },
+  { "name": "Cloudflare Trace",          "url": "https://1.1.1.1/cdn-cgi/trace",                                                                                     "active": true  },
+  { "name": "GitHub Zen",                "url": "https://api.github.com/zen",                                                                                         "active": true  },
+  { "name": "CoinGecko Ping",            "url": "https://api.coingecko.com/api/v3/ping",                                                                             "active": false },
+  { "name": "Coinbase API Health",       "url": "https://api.exchange.coinbase.com/time",                                                                            "active": false },
+  { "name": "Open-Meteo Weather",        "url": "https://api.open-meteo.com/v1/forecast?latitude=33.5387&longitude=-112.1860&current_weather=true",                  "active": false },
+  { "name": "SpaceX Latest Launch",      "url": "https://api.spacexdata.com/v4/launches/latest",                                                                     "active": false },
+  { "name": "API Directories",           "url": "https://api.apis.guru/v2/list.json",                                                                                "active": false },
+  { "name": "Data USA",                  "url": "https://api.datausa.io/tesseract/cubes/acs_yg_total_population_5",                                                  "active": false },
+  { "name": "iTunes Media Search",       "url": "https://itunes.apple.com/search?term=bring+me+the+horizon&limit=1",                                                 "active": false },
+  { "name": "Google Books (CS)",         "url": "https://www.googleapis.com/books/v1/volumes?q=computer+science",                                                    "active": false },
+  { "name": "NYC Open Data (Libraries)", "url": "https://data.cityofnewyork.us/resource/b67a-vkqb.json?$limit=1",                                                   "active": false },
+  { "name": "Deck of Cards API",         "url": "https://deckofcardsapi.com/api/deck/new/shuffle/?deck_count=1",                                                     "active": false },
+  { "name": "RandomUser Generator",      "url": "https://randomuser.me/api/",                                                                                         "active": false },
+  { "name": "Cat Facts",                 "url": "https://catfact.ninja/fact",                                                                                         "active": false },
+  { "name": "Postman Echo",              "url": "https://postman-echo.com/get",                                                                                       "active": false },
+  { "name": "Wikipedia (C Language)",    "url": "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&titles=C_(programming_language)&format=json",         "active": false }
+]

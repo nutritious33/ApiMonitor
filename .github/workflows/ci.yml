@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    name: Build, Test & Package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run tests
+        run: mvn -B test --no-transfer-progress
+        working-directory: api-monitor
+
+      - name: Package JAR (skip tests — already ran above)
+        run: mvn -B package -DskipTests --no-transfer-progress
+        working-directory: api-monitor
+
+      - name: Build Docker image
+        run: docker build -t api-monitor:ci .
+        working-directory: api-monitor
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: api-monitor/target/surefire-reports/

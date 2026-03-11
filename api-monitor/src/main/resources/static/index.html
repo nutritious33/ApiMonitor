@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Health Monitor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <style>
+        :root {
+            --bg-base: #0a0a0a;
+            --bg-card: #171717;
+            --bg-surface: #262626;
+            --text-main: #f5f5f5;
+            --text-muted: #a3a3a3;
+            --accent: #3b82f6;
+            --up-color: #10b981;
+            --up-glow: rgba(16, 185, 129, 0.4);
+            --down-color: #ef4444;
+            --down-glow: rgba(239, 68, 68, 0.4);
+            --border-color: #333;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 1rem;
+        }
+
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+        }
+        
+        h2 {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            padding-bottom: 0.5rem;
+            margin: 0;
+        }
+
+        .leaderboard-section, .catalog-section {
+            margin-bottom: 2.5rem;
+        }
+        
+        .leaderboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+
+        .leaderboard-item {
+            display: flex;
+            align-items: center;
+            background-color: var(--bg-card);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .leaderboard-rank {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-right: 1rem;
+        }
+
+        .leaderboard-name {
+            font-weight: 500;
+            flex-grow: 1;
+        }
+
+        .leaderboard-latency {
+            font-family: monospace;
+            color: var(--up-color);
+        }
+
+        .catalog-controls {
+            display: flex;
+            gap: 1rem;
+        }
+
+        #inactive-api-select {
+            flex-grow: 1;
+            background-color: var(--bg-card);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0.6rem 1rem;
+            outline: none;
+        }
+
+        #add-api-btn, .clear-all-btn {
+            padding: 0.6rem 1.5rem;
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+
+        #add-api-btn:hover, .clear-all-btn:hover {
+            background-color: #2563eb;
+        }
+
+        .clear-all-btn {
+            background-color: var(--down-color);
+        }
+        .clear-all-btn:hover {
+            background-color: #c03d3d;
+        }
+        
+        #api-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .api-card {
+            position: relative;
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            cursor: grab;
+            transition: box-shadow 0.2s;
+        }
+        .api-card:hover {
+            box-shadow: 0 0 15px var(--bg-surface);
+        }
+
+        .remove-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: none;
+            background-color: rgba(255,255,255,0.1);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 24px;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.2s, background-color 0.2s;
+        }
+
+        .api-card:hover .remove-btn {
+            opacity: 1;
+        }
+
+        .remove-btn:hover {
+            background-color: var(--down-color);
+            color: white;
+        }
+
+        .api-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .api-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            padding-right: 2rem;
+        }
+        .api-name a {
+            color: var(--text-main);
+            text-decoration: none;
+        }
+        .api-name a:hover {
+            text-decoration: underline;
+        }
+
+        .api-status-badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .badge-up { background-color: var(--up-glow); color: var(--up-color); }
+        .badge-down { background-color: var(--down-glow); color: var(--down-color); }
+
+        .api-metric {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .metric-value {
+            color: var(--text-main);
+            font-weight: 500;
+            font-family: monospace;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            visibility: hidden;
+            opacity: 0;
+            transition: visibility 0s 0.2s, opacity 0.2s;
+        }
+
+        .modal-overlay.visible {
+            visibility: visible;
+            opacity: 1;
+            transition: visibility 0s, opacity 0.2s;
+        }
+
+        .modal-content {
+            background-color: var(--bg-card);
+            padding: 2rem;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .modal-content h3 {
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .modal-btn {
+            padding: 0.6rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            border: none;
+        }
+
+        .modal-btn-confirm {
+            background-color: var(--down-color);
+            color: white;
+        }
+         .modal-btn-confirm:hover {
+            background-color: #c03d3d;
+        }
+
+        .modal-btn-cancel {
+            background-color: #404040;
+            color: var(--text-main);
+        }
+         .modal-btn-cancel:hover {
+            background-color: #525252;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>API Health Monitor</h1>
+        </div>
+
+        <div class="leaderboard-section">
+            <div class="section-header">
+                <h2>Top 3 Fastest APIs</h2>
+            </div>
+            <div id="leaderboard" class="leaderboard"></div>
+        </div>
+
+        <div class="catalog-section">
+            <div class="section-header">
+                <h2>API Catalog</h2>
+            </div>
+            <div class="catalog-controls">
+                <select id="inactive-api-select"></select>
+                <button id="add-api-btn">Add to Tracker</button>
+            </div>
+        </div>
+
+        <div class="section-header">
+            <h2>Active Monitor</h2>
+            <button id="clear-all-btn" class="clear-all-btn" style="display: none;">Clear All</button>
+        </div>
+        <div id="api-grid"></div>
+    </div>
+
+    <div id="confirmation-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Are you sure you want to clear all?</h3>
+            <div class="modal-actions">
+                <button id="confirm-clear-btn" class="modal-btn modal-btn-confirm">Yes</button>
+                <button id="cancel-clear-btn" class="modal-btn modal-btn-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API key is fetched from /api/config at startup so it works in both
+        // dev (dev-api-key) and prod (whatever API_SECURITY_KEY is set to).
+        let API_KEY = '';
+
+        const apiGrid = document.getElementById('api-grid');
+        const leaderboard = document.getElementById('leaderboard');
+        const inactiveApiSelect = document.getElementById('inactive-api-select');
+        const addApiBtn = document.getElementById('add-api-btn');
+        const clearAllBtn = document.getElementById('clear-all-btn');
+        const confirmationModal = document.getElementById('confirmation-modal');
+        const confirmClearBtn = document.getElementById('confirm-clear-btn');
+        const cancelClearBtn = document.getElementById('cancel-clear-btn');
+
+
+        function renderLeaderboard(apis) {
+            leaderboard.innerHTML = '';
+            const fastestApis = apis
+                .filter(api => api.isActive && api.currentStatus === 'UP' && api.lastLatencyMs != null)
+                .sort((a, b) => a.lastLatencyMs - b.lastLatencyMs)
+                .slice(0, 3);
+            
+            if (fastestApis.length === 0) {
+                leaderboard.innerHTML = '<p style="color: var(--text-muted);">No active APIs with latency data available.</p>';
+                return;
+            }
+
+            fastestApis.forEach((api, index) => {
+                const item = document.createElement('div');
+                item.className = 'leaderboard-item';
+                item.innerHTML = `
+                    <span class="leaderboard-rank">#${index + 1}</span>
+                    <span class="leaderboard-name">${api.name}</span>
+                    <span class="leaderboard-latency">${api.lastLatencyMs} ms</span>
+                `;
+                leaderboard.appendChild(item);
+            });
+        }
+
+        function renderGrid(apis) {
+            apiGrid.innerHTML = '';
+            const savedOrder = JSON.parse(localStorage.getItem('apiOrder')) || [];
+            
+            const activeApis = apis.filter(api => api.isActive);
+
+            clearAllBtn.style.display = activeApis.length > 0 ? 'block' : 'none';
+
+            activeApis.sort((a, b) => {
+                const aIndex = savedOrder.indexOf(a.id);
+                const bIndex = savedOrder.indexOf(b.id);
+                if (aIndex === -1 && bIndex === -1) return 0;
+                if (aIndex === -1) return 1;
+                if (bIndex === -1) return -1;
+                return aIndex - bIndex;
+            });
+
+            activeApis.forEach(api => {
+                const isUp = api.currentStatus === 'UP';
+                const uptime = (api.totalChecks > 0) 
+                    ? ((api.successfulChecks / api.totalChecks) * 100).toFixed(2) 
+                    : '100.00';
+                
+                const card = document.createElement('div');
+                card.classList.add('api-card');
+                card.dataset.id = api.id;
+
+                const timeString = api.lastCheckedAt
+                    ? new Date(api.lastCheckedAt + 'Z').toLocaleTimeString()
+                    : 'N/A';
+
+                card.innerHTML = `
+                    <button class="remove-btn" title="Remove from tracker">×</button>
+                    <div class="api-header">
+                        <div class="api-name"><a href="${api.url}" target="_blank" rel="noopener noreferrer">${api.name}</a></div>
+                        <div class="api-status-badge ${isUp ? 'badge-up' : 'badge-down'}">
+                            ${api.currentStatus || 'Pending'}
+                        </div>
+                    </div>
+                    <div class="api-metric">
+                        <span>Uptime</span>
+                        <span class="metric-value">${uptime}%</span>
+                    </div>
+                    <div class="api-metric">
+                        <span>Latency</span>
+                        <span class="metric-value">${api.lastLatencyMs != null ? api.lastLatencyMs + ' ms' : '--'}</span>
+                    </div>
+                     <div class="api-metric">
+                        <span>Checks (S/T)</span>
+                        <span class="metric-value">${api.successfulChecks}/${api.totalChecks}</span>
+                    </div>
+                    <div class="api-metric">
+                        <span>Last Checked</span>
+                        <span class="metric-value">${timeString}</span>
+                    </div>
+                `;
+                apiGrid.appendChild(card);
+            });
+        }
+
+        function renderCatalog(apis) {
+            const selectedId = inactiveApiSelect.value;
+            inactiveApiSelect.innerHTML = '';
+            const inactiveApis = apis.filter(api => !api.isActive);
+            if (inactiveApis.length === 0) {
+                inactiveApiSelect.innerHTML = '<option>All APIs are active</option>';
+                addApiBtn.disabled = true;
+            } else {
+                 inactiveApis.forEach(api => {
+                    const option = document.createElement('option');
+                    option.value = api.id;
+                    option.textContent = api.name;
+                    inactiveApiSelect.appendChild(option);
+                });
+                addApiBtn.disabled = false;
+                if (selectedId) {
+                    inactiveApiSelect.value = selectedId;
+                }
+            }
+        }
+        
+        function authHeaders() {
+            return { 'X-API-Key': API_KEY };
+        }
+
+        async function activateApi() {
+            const selectedId = inactiveApiSelect.value;
+            if (!selectedId) return;
+
+            try {
+                const response = await fetch(`/api/health-metrics/activate/${selectedId}`, {
+                    method: 'POST',
+                    headers: authHeaders()
+                });
+                if (!response.ok) throw new Error('Failed to activate API.');
+                await fetchMetrics();
+            } catch (err) {
+                console.error("Error activating API:", err);
+            }
+        }
+
+        async function deactivateApi(id) {
+            try {
+                const response = await fetch(`/api/health-metrics/deactivate/${id}`, {
+                    method: 'POST',
+                    headers: authHeaders()
+                });
+                if (!response.ok) throw new Error('Failed to deactivate API.');
+                await fetchMetrics();
+            } catch (err) {
+                console.error("Error deactivating API:", err);
+            }
+        }
+
+        async function deactivateAllApis() {
+            try {
+                const response = await fetch('/api/health-metrics/deactivate/all', {
+                    method: 'POST',
+                    headers: authHeaders()
+                });
+                if (!response.ok) throw new Error('Failed to deactivate all APIs.');
+                await fetchMetrics();
+            } catch (err) {
+                console.error("Error deactivating all APIs:", err);
+            }
+        }
+        
+        async function fetchMetrics() {
+            try {
+                const response = await fetch('/api/health-metrics');
+                const apis = await response.json();
+                renderLeaderboard(apis);
+                renderGrid(apis);
+                renderCatalog(apis);
+            } catch (err) {
+                console.error("Error fetching metrics:", err);
+            }
+        }
+        
+        new Sortable(apiGrid, {
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            onEnd: function (evt) {
+                const order = Array.from(evt.to.children).map(child => parseInt(child.dataset.id));
+                localStorage.setItem('apiOrder', JSON.stringify(order));
+            },
+        });
+
+        addApiBtn.addEventListener('click', activateApi);
+
+        apiGrid.addEventListener('click', (event) => {
+            if (event.target.classList.contains('remove-btn')) {
+                const card = event.target.closest('.api-card');
+                if (card) {
+                    deactivateApi(card.dataset.id);
+                }
+            }
+        });
+
+        clearAllBtn.addEventListener('click', () => {
+            confirmationModal.classList.add('visible');
+        });
+
+        cancelClearBtn.addEventListener('click', () => {
+            confirmationModal.classList.remove('visible');
+        });
+
+        confirmClearBtn.addEventListener('click', () => {
+            deactivateAllApis();
+            confirmationModal.classList.remove('visible');
+        });
+
+        // Fetch config first, then start polling
+        fetch('/api/config')
+            .then(r => r.json())
+            .then(cfg => { API_KEY = cfg.apiKey; })
+            .catch(() => { API_KEY = 'dev-api-key'; })
+            .finally(() => {
+                fetchMetrics();
+                setInterval(fetchMetrics, 5000);
+            });
+    </script>
+</body>
+</html>
