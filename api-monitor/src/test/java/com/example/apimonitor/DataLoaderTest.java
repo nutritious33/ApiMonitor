@@ -5,9 +5,9 @@ import com.example.apimonitor.service.HealthCheckService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -26,7 +26,7 @@ class DataLoaderTest {
     @Autowired
     private ApiEndpointRepository repository;
 
-    @MockBean
+    @MockitoBean
     private HealthCheckService healthCheckService;
 
     @Test

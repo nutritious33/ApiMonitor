@@ -22,17 +22,21 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Run tests
+      - name: Run tests (backend only — frontend build skipped for speed)
         run: mvn -B test --no-transfer-progress
         working-directory: api-monitor
 
-      - name: Package JAR (skip tests — already ran above)
-        run: mvn -B package -DskipTests --no-transfer-progress
+      - name: Build Docker image (multi-stage — compiles JAR + React bundle inside Docker)
+        # VITE_API_KEY is passed via --build-arg. GitHub Actions automatically
+        # redacts secret values from log output, so it won't appear in CI logs.
+        # Add VITE_API_KEY to repo Settings → Secrets → Actions.
+        run: |
+          docker build \
+            --build-arg VITE_API_KEY="${VITE_API_KEY}" \
+            -t api-monitor:ci .
         working-directory: api-monitor
-
-      - name: Build Docker image
-        run: docker build -t api-monitor:ci .
-        working-directory: api-monitor
+        env:
+          VITE_API_KEY: ${{ secrets.VITE_API_KEY }}
 
       - name: Upload test report
         if: always()

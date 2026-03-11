@@ -18,7 +18,15 @@ services:
       retries: 5
 
   api-monitor:
-    build: .
+    build:
+      context: .
+      args:
+        # Bakes the API key into the React bundle at build time.
+        # Docker Compose reads SECRET_SECURITY_KEY from .env automatically.
+        #
+        # KEY ROTATION: After changing SECRET_SECURITY_KEY in .env, rebuild with:
+        #   docker compose build --no-cache && docker compose up -d
+        VITE_API_KEY: ${SECRET_SECURITY_KEY}
     ports:
       - "8080:8080"
     depends_on:
@@ -29,7 +37,7 @@ services:
       DATASOURCE_URL: jdbc:postgresql://postgres:5432/apimonitor
       DATASOURCE_USERNAME: ${DATASOURCE_USERNAME:-apimonitor}
       DATASOURCE_PASSWORD: ${DATASOURCE_PASSWORD}
-      API_SECURITY_KEY: ${API_SECURITY_KEY}
+      API_SECURITY_KEY: ${SECRET_SECURITY_KEY}
       TUNNEL_TOKEN: ${TUNNEL_TOKEN}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080}
     networks:

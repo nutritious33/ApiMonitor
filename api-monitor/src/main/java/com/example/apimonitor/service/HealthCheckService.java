@@ -12,6 +12,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -20,13 +21,18 @@ public class HealthCheckService {
 
     private static final Logger log = LoggerFactory.getLogger(HealthCheckService.class);
 
-    // Regex patterns for private/loopback address ranges (SSRF defense)
+    // Regex patterns for private/loopback address ranges (SSRF defense).
+    // Covers: loopback (localhost, 127.x, ::1, 0.0.0.0), RFC-1918 private ranges
+    // (10.x, 172.16-31.x, 192.168.x), and the full link-local range (169.254.x)
+    // which includes the AWS/GCP/Azure instance-metadata service at 169.254.169.254.
     private static final List<Pattern> BLOCKED_HOST_PATTERNS = List.of(
             Pattern.compile("^localhost$", Pattern.CASE_INSENSITIVE),
             Pattern.compile("^127\\..*"),
+            Pattern.compile("^0\\.0\\.0\\.0$"),                       // all-zeros maps to loopback on most OSes
             Pattern.compile("^10\\..*"),
             Pattern.compile("^192\\.168\\..*"),
             Pattern.compile("^172\\.(1[6-9]|2[0-9]|3[0-1])\\..*"),
+            Pattern.compile("^169\\.254\\..*"),                        // link-local / cloud metadata endpoints
             Pattern.compile("^::1$")
     );
 
@@ -87,7 +93,7 @@ public class HealthCheckService {
                         response -> {
                             long latency = System.currentTimeMillis() - startTime;
                             endpoint.setLastLatencyMs(latency);
-                            endpoint.setLastCheckedAt(LocalDateTime.now());
+                            endpoint.setLastCheckedAt(LocalDateTime.now(ZoneOffset.UTC));
                             if (response.getStatusCode().is2xxSuccessful()) {
                                 endpoint.setCurrentStatus("UP");
                                 endpoint.setSuccessfulChecks(endpoint.getSuccessfulChecks() + 1);
@@ -101,7 +107,7 @@ public class HealthCheckService {
                         error -> {
                             long latency = System.currentTimeMillis() - startTime;
                             endpoint.setLastLatencyMs(latency);
-                            endpoint.setLastCheckedAt(LocalDateTime.now());
+                            endpoint.setLastCheckedAt(LocalDateTime.now(ZoneOffset.UTC));
                             endpoint.setCurrentStatus("DOWN");
                             log.warn("Endpoint id={} name='{}' is DOWN — {}", endpoint.getId(), endpoint.getName(), error.getMessage());
                             apiEndpointRepository.save(endpoint);
