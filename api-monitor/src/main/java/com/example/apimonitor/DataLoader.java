@@ -18,7 +18,7 @@ public class DataLoader implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DataLoader.class);
 
-    /** Lightweight projection for deserialising endpoints.json — keeps Jackson out of the JPA entity. */
+    /** Lightweight projection for deserialising endpoints.json */
     record EndpointConfig(String name, String url, boolean active) {}
 
     private final ApiEndpointRepository apiEndpointRepository;
