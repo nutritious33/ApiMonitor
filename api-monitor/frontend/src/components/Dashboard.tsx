@@ -15,11 +15,14 @@ import {
   activateEndpoint,
   deactivateEndpoint,
   deactivateAll,
+  addCustomEndpoint,
+  deleteCustomEndpoint,
 } from '../api'
 import Leaderboard from './Leaderboard'
 import CatalogDropdown from './CatalogDropdown'
 import MonitorCard from './MonitorCard'
 import ClearAllModal from './ClearAllModal'
+import AddCustomEndpointModal from './AddCustomEndpointModal'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -61,6 +64,8 @@ export default function Dashboard() {
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false)
+  const [addModalOpen, setAddModalOpen] = useState(false)
+  const [addError, setAddError] = useState<string | null>(null)
 
   // ── Mutations ──────────────────────────────────────────────────────────────
 
@@ -84,6 +89,27 @@ export default function Dashboard() {
       setModalOpen(false)
       invalidate()
     },
+  })
+
+  const addCustomMutation = useMutation({
+    mutationFn: ({ name, url }: { name: string; url: string }) =>
+      addCustomEndpoint(name, url),
+    onSuccess: () => {
+      setAddModalOpen(false)
+      setAddError(null)
+      invalidate()
+    },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? 'Failed to add endpoint'
+      setAddError(msg)
+    },
+  })
+
+  const deleteCustomMutation = useMutation({
+    mutationFn: deleteCustomEndpoint,
+    onSuccess: invalidate,
   })
 
   // ── Drag-and-drop ──────────────────────────────────────────────────────────
@@ -148,15 +174,24 @@ export default function Dashboard() {
       <section>
         <div className="flex justify-between items-center border-b border-line pb-2 mb-6">
           <h2 className="text-xl text-muted font-normal">Active Monitor</h2>
-          {activeApis.length > 0 && (
+          <div className="flex gap-3">
             <button
-              className="px-5 py-2 bg-down hover:bg-down-hover text-white font-semibold
-                rounded-md transition-colors text-sm"
-              onClick={() => setModalOpen(true)}
+              className="px-5 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-100
+                font-semibold rounded-md transition-colors text-sm border border-line"
+              onClick={() => { setAddError(null); setAddModalOpen(true) }}
             >
-              Clear All
+              + Add Custom API
             </button>
-          )}
+            {activeApis.length > 0 && (
+              <button
+                className="px-5 py-2 bg-down hover:bg-down-hover text-white font-semibold
+                  rounded-md transition-colors text-sm"
+                onClick={() => setModalOpen(true)}
+              >
+                Clear All
+              </button>
+            )}
+          </div>
         </div>
 
         {activeApis.length === 0 ? (
@@ -175,7 +210,13 @@ export default function Dashboard() {
                   <MonitorCard
                     key={api.id}
                     api={api}
-                    onRemove={id => deactivateMutation.mutate(id)}
+                    onRemove={id => {
+                      if (api.source === 'CUSTOM') {
+                        deleteCustomMutation.mutate(id)
+                      } else {
+                        deactivateMutation.mutate(id)
+                      }
+                    }}
                   />
                 ))}
               </div>
@@ -190,6 +231,15 @@ export default function Dashboard() {
         isPending={clearAllMutation.isPending}
         onConfirm={() => clearAllMutation.mutate()}
         onCancel={() => setModalOpen(false)}
+      />
+
+      {/* ── Add custom endpoint modal ────────────────────────── */}
+      <AddCustomEndpointModal
+        isOpen={addModalOpen}
+        isPending={addCustomMutation.isPending}
+        errorMessage={addError}
+        onConfirm={(name, url) => addCustomMutation.mutate({ name, url })}
+        onCancel={() => { setAddModalOpen(false); setAddError(null) }}
       />
     </div>
   )

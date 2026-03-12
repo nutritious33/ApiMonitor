@@ -22,3 +22,9 @@ export const deactivateEndpoint = (id: number): Promise<void> =>
 
 export const deactivateAll = (): Promise<void> =>
   client.post('/api/health-metrics/deactivate/all').then(() => undefined)
+
+export const addCustomEndpoint = (name: string, url: string): Promise<void> =>
+  client.post('/api/custom-endpoints', { name, url }).then(() => undefined)
+
+export const deleteCustomEndpoint = (id: number): Promise<void> =>
+  client.delete(`/api/custom-endpoints/${id}`).then(() => undefined)

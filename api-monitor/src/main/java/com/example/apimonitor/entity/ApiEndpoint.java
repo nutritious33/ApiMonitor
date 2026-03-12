@@ -1,6 +1,9 @@
 package com.example.apimonitor.entity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -21,6 +24,10 @@ public class ApiEndpoint {
     private Integer totalChecks = 0;
     private Integer successfulChecks = 0;
     private Boolean isActive = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ApiEndpointSource source = ApiEndpointSource.BUILTIN;
 
     public Long getId() { return id; }
 
@@ -74,5 +81,13 @@ public class ApiEndpoint {
 
     public void setIsActive(Boolean active) {
         isActive = active;
+    }
+
+    public ApiEndpointSource getSource() {
+        return source;
+    }
+
+    public void setSource(ApiEndpointSource source) {
+        this.source = source;
     }
 }

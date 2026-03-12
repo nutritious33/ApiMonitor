@@ -1,3 +1,5 @@
+export type ApiEndpointSource = 'BUILTIN' | 'CUSTOM'
+
 export interface ApiEndpoint {
   id: number
   name: string
@@ -8,4 +10,5 @@ export interface ApiEndpoint {
   successfulChecks: number
   totalChecks: number
   lastCheckedAt: string | null
+  source: ApiEndpointSource
 }

@@ -8,7 +8,7 @@ interface Props {
 }
 
 export default function CatalogDropdown({ apis, onActivate, isPending }: Props) {
-  const inactive = apis.filter(a => !a.isActive)
+  const inactive = apis.filter(a => !a.isActive).sort((a, b) => a.name.localeCompare(b.name))
   const [selectedId, setSelectedId] = useState<number | null>(
     inactive[0]?.id ?? null,
   )

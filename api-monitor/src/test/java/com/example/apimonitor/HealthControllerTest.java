@@ -23,6 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.apimonitor.config.SecurityConfig;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
@@ -32,6 +33,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 @WebMvcTest(HealthController.class)
 @Import(SecurityConfig.class)
 @ActiveProfiles("test")
+// Explicitly supply api.security.key so SecurityConfig can inject it regardless
+// of how the @WebMvcTest slice context processes profile-specific properties.
+@TestPropertySource(properties = "api.security.key=test-api-key")
 class HealthControllerTest {
 
     static final String API_KEY_HEADER = "X-API-Key";

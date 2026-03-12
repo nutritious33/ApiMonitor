@@ -9,8 +9,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.UnknownHostException;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -48,10 +50,14 @@ public class HealthCheckService {
     }
 
     /**
-     * Validates that a URL is HTTPS and does not target private/internal network ranges.
+     * Validates that a URL is HTTPS, within length limits, and does not target
+     * private/internal network ranges (including DNS rebinding defense).
      * Throws IllegalArgumentException if the URL fails validation (SSRF defense).
      */
     public void validateUrl(String url) {
+        if (url == null || url.length() > 500) {
+            throw new IllegalArgumentException("URL must not exceed 500 characters");
+        }
         URI uri;
         try {
             uri = new URI(url);
@@ -61,14 +67,37 @@ public class HealthCheckService {
         if (!"https".equalsIgnoreCase(uri.getScheme())) {
             throw new IllegalArgumentException("Only HTTPS URLs are permitted, got: " + url);
         }
-        String host = uri.getHost();
-        if (host == null || host.isBlank()) {
+        String rawHost = uri.getHost();
+        if (rawHost == null || rawHost.isBlank()) {
             throw new IllegalArgumentException("URL is missing a host: " + url);
         }
+        // Normalize IPv6 literals: URI.getHost() may return "[::1]" (with brackets) on
+        // some JVM versions or "::1" (without) on others. Strip brackets to be consistent.
+        String host = (rawHost.startsWith("[") && rawHost.endsWith("]"))
+                ? rawHost.substring(1, rawHost.length() - 1)
+                : rawHost;
+
+        // Hostname pattern check (fast path — no network I/O)
         for (Pattern blocked : BLOCKED_HOST_PATTERNS) {
             if (blocked.matcher(host).matches()) {
                 throw new IllegalArgumentException("Private/internal URLs are not permitted: " + url);
             }
+        }
+        // DNS rebinding defense: resolve the hostname and verify the resulting IP is not private.
+        // Uses Java's built-in InetAddress classification rather than regex on the IP string so
+        // that both IPv4 and IPv6 (compressed or expanded notation) are handled correctly.
+        try {
+            InetAddress[] addresses = InetAddress.getAllByName(host);
+            for (InetAddress addr : addresses) {
+                if (addr.isLoopbackAddress()   // 127.x.x.x / ::1
+                        || addr.isSiteLocalAddress()   // 10.x / 172.16-31.x / 192.168.x
+                        || addr.isLinkLocalAddress()   // 169.254.x (cloud metadata)
+                        || addr.isAnyLocalAddress()) { // 0.0.0.0
+                    throw new IllegalArgumentException("URL resolves to a private/internal address: " + url);
+                }
+            }
+        } catch (UnknownHostException e) {
+            throw new IllegalArgumentException("URL hostname could not be resolved: " + host);
         }
     }
 

@@ -1,6 +1,7 @@
 package com.example.apimonitor.dto;
 
 import com.example.apimonitor.entity.ApiEndpoint;
+import com.example.apimonitor.entity.ApiEndpointSource;
 
 import java.time.LocalDateTime;
 
@@ -17,7 +18,8 @@ public record ApiEndpointDTO(
         LocalDateTime lastCheckedAt,
         Integer totalChecks,
         Integer successfulChecks,
-        Boolean isActive
+        Boolean isActive,
+        ApiEndpointSource source
 ) {
     public static ApiEndpointDTO from(ApiEndpoint e) {
         return new ApiEndpointDTO(
@@ -29,7 +31,8 @@ public record ApiEndpointDTO(
                 e.getLastCheckedAt(),
                 e.getTotalChecks(),
                 e.getSuccessfulChecks(),
-                e.getIsActive()
+                e.getIsActive(),
+                e.getSource()
         );
     }
 }

@@ -65,6 +65,12 @@ export default function MonitorCard({ api, onRemove }: Props) {
           >
             {api.name}
           </a>
+          {api.source === 'CUSTOM' && (
+            <span className="ml-2 inline-block text-[0.65rem] font-bold uppercase tracking-wide
+              px-1.5 py-0.5 rounded bg-neutral-700 text-neutral-400 align-middle">
+              Custom
+            </span>
+          )}
         </div>
         <StatusBadge status={api.currentStatus} />
       </div>

@@ -1,6 +1,7 @@
 package com.example.apimonitor;
 
 import com.example.apimonitor.entity.ApiEndpoint;
+import com.example.apimonitor.entity.ApiEndpointSource;
 import com.example.apimonitor.repository.ApiEndpointRepository;
 import com.example.apimonitor.service.HealthCheckService;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -57,6 +58,7 @@ public class DataLoader implements CommandLineRunner {
         endpoint.setName(name);
         endpoint.setUrl(url);
         endpoint.setIsActive(isActive);
+        endpoint.setSource(ApiEndpointSource.BUILTIN);
         return apiEndpointRepository.save(endpoint);
     }
 }
