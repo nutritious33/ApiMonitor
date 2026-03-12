@@ -41,18 +41,6 @@ export default function MonitorCard({ api, onRemove }: Props) {
       {...attributes}
       {...listeners}
     >
-      {/* Remove button — appears on hover, click stops drag propagation */}
-      <button
-        className="absolute top-2 right-2 w-6 h-6 rounded-full bg-white/10 text-muted
-          opacity-0 group-hover:opacity-100 transition-opacity hover:bg-down hover:text-white
-          flex items-center justify-center text-base leading-none"
-        title="Remove from tracker"
-        onPointerDown={e => e.stopPropagation()}
-        onClick={() => onRemove(api.id)}
-      >
-        ×
-      </button>
-
       {/* Card header */}
       <div className="flex justify-between items-start mb-4 gap-2">
         <div className="text-[1.05rem] font-semibold pr-2 min-w-0">
@@ -72,7 +60,22 @@ export default function MonitorCard({ api, onRemove }: Props) {
             </span>
           )}
         </div>
-        <StatusBadge status={api.currentStatus} />
+        
+        {/* Flex wrapper for the badge and the button */}
+        <div className="flex items-center gap-2 -mr-2">
+          <StatusBadge status={api.currentStatus} />
+          {/* Remove button — appears on hover */}
+          <button
+            className="w-6 h-6 rounded-full bg-white/10 text-muted
+              opacity-0 group-hover:opacity-100 transition-opacity hover:bg-down hover:text-white
+              flex items-center justify-center text-base leading-none shrink-0"
+            title="Remove from tracker"
+            onPointerDown={e => e.stopPropagation()}
+            onClick={() => onRemove(api.id)}
+          >
+            ×
+          </button>
+        </div>
       </div>
 
       {/* Metrics */}
