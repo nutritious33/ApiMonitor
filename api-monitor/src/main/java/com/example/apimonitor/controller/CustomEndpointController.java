@@ -35,7 +35,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class CustomEndpointController {
 
     private static final Logger log = LoggerFactory.getLogger(CustomEndpointController.class);
-
     record AddCustomEndpointRequest(
             @NotBlank(message = "name must not be blank")
             @Size(max = 100, message = "name must not exceed 100 characters")
@@ -47,7 +46,6 @@ public class CustomEndpointController {
                 message = "name may only contain letters, numbers, spaces, and . - _ / : ( ) ,"
             )
             String name,
-
             @NotBlank(message = "url must not be blank")
             String url
     ) {}
@@ -58,8 +56,7 @@ public class CustomEndpointController {
     @Value("${monitor.max-custom-endpoints:10}")
     private int maxCustomEndpoints;
 
-    public CustomEndpointController(ApiEndpointRepository apiEndpointRepository,
-                                    HealthCheckService healthCheckService) {
+    public CustomEndpointController(ApiEndpointRepository apiEndpointRepository, HealthCheckService healthCheckService) {
         this.apiEndpointRepository = apiEndpointRepository;
         this.healthCheckService = healthCheckService;
     }
@@ -73,7 +70,10 @@ public class CustomEndpointController {
             @ApiResponse(responseCode = "400", description = "Invalid URL or request body"),
             @ApiResponse(responseCode = "429", description = "Global custom endpoint cap reached")
     })
-    public ResponseEntity<ApiEndpointDTO> addCustomEndpoint(
+    // synchronized eliminates the TOCTOU race between countBySource() and save().
+    // Without this, concurrent requests could all read a count below the cap and
+    // all proceed to insert, exceeding the max-custom-endpoints limit.
+    public synchronized ResponseEntity<ApiEndpointDTO> addCustomEndpoint(
             @Valid @RequestBody AddCustomEndpointRequest request) {
 
         long currentCount = apiEndpointRepository.countBySource(ApiEndpointSource.CUSTOM);
@@ -105,7 +105,7 @@ public class CustomEndpointController {
         healthCheckService.checkSingleEndpoint(saved);
 
         log.info("Added custom endpoint id={} name='{}' url='{}'",
-                saved.getId(), saved.getName(), saved.getUrl());
+                saved.getId(), sanitizeForLog(saved.getName()), sanitizeForLog(saved.getUrl()));
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiEndpointDTO.from(saved));
     }
 
@@ -126,7 +126,16 @@ public class CustomEndpointController {
                         "Custom endpoint not found: " + id));
 
         apiEndpointRepository.delete(endpoint);
-        log.info("Deleted custom endpoint id={} name='{}'", endpoint.getId(), endpoint.getName());
+        log.info("Deleted custom endpoint id={} name='{}'", endpoint.getId(), sanitizeForLog(endpoint.getName()));
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Strips CR/LF characters from a string before it is written to a log.
+     * Prevents log-injection attacks where a crafted URL or name containing
+     * newline sequences could forge additional log lines.
+     */
+    private static String sanitizeForLog(String value) {
+        return (value == null) ? null : value.replace('\n', ' ').replace('\r', ' ');
     }
 }

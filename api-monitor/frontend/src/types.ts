@@ -12,3 +12,24 @@ export interface ApiEndpoint {
   lastCheckedAt: string | null
   source: ApiEndpointSource
 }
+
+// ── Submission queue ──────────────────────────────────────────────────────────
+
+export type SubmissionStatus = 'PENDING' | 'APPROVED' | 'DENIED'
+
+/** Full submission record — returned to admin only. */
+export interface PendingSubmission {
+  id: number
+  name: string
+  url: string
+  status: SubmissionStatus
+  submittedAt: string
+  submissionToken: string
+}
+
+/** Minimal status response — returned to the public submitter for polling. */
+export interface SubmissionStatusResponse {
+  token: string
+  name: string
+  status: SubmissionStatus
+}

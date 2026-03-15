@@ -75,6 +75,12 @@
             <version>2.8.6</version>
         </dependency>
 
+        <!-- Email notifications (optional — disabled when MAIL_HOST is not set) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -144,27 +150,10 @@
                         <goals><goal>npm</goal></goals>
                         <configuration>
                             <arguments>run build</arguments>
-                            <!-- VITE_API_KEY is injected from the environment (CI secret or local env) -->
-                            <environmentVariables>
-                                <VITE_API_KEY>${env.VITE_API_KEY}</VITE_API_KEY>
-                            </environmentVariables>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
-            <!--
-                Sync Vite output → target/classes after the frontend build.
-
-                Maven's process-resources phase runs BEFORE prepare-package, so it
-                copies src/main/resources/static/ to target/classes/static/ before
-                Vite has had a chance to write the fresh bundle there.  Without this
-                execution the packaged JAR would contain whatever stale bundle was on
-                disk at compile time instead of the freshly-built one.
-
-                This copy-resources execution is declared after frontend-maven-plugin,
-                so Maven runs it last within prepare-package — guaranteeing the fresh
-                Vite output is in target/classes when spring-boot:repackage fires.
-            -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-resources-plugin</artifactId>

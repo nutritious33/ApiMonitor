@@ -4,13 +4,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
+import org.springframework.security.web.header.writers.StaticHeadersWriter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -46,7 +48,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            // REST API — no CSRF tokens needed
+            // REST API — no CSRF tokens needed (stateless, key-authenticated)
             .csrf(csrf -> csrf.disable())
             // CORS — allows Vite dev server and any configured production origin
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -59,6 +61,16 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> {
                 // Public: read-only metrics (polled by the frontend every 10 s)
                 auth.requestMatchers(HttpMethod.GET, "/api/health-metrics").permitAll();
+                // Public: watchlist management for predefined catalog endpoints.
+                // Adding or deleting custom endpoints still requires an API key (see below).
+                auth.requestMatchers(HttpMethod.POST, "/api/health-metrics/activate/*").permitAll();
+                auth.requestMatchers(HttpMethod.POST, "/api/health-metrics/deactivate/*").permitAll();
+                auth.requestMatchers(HttpMethod.POST, "/api/health-metrics/deactivate/all").permitAll();
+                // Public: submission queue
+                //   POST  /api/submissions        — submit a URL for review
+                //   GET   /api/submissions/{token} — poll status by UUID token
+                auth.requestMatchers(HttpMethod.POST, "/api/submissions").permitAll();
+                auth.requestMatchers(HttpMethod.GET, "/api/submissions/*").permitAll();
                 // Public: React SPA and its bundled assets
                 auth.requestMatchers("/", "/index.html", "/assets/**", "/*.js", "/*.css").permitAll();
                 // OpenAPI docs — only when springdoc is enabled (disabled in prod profile).
@@ -71,15 +83,50 @@ public class SecurityConfig {
                 if (h2ConsoleEnabled) {
                     auth.requestMatchers("/h2-console/**").permitAll();
                 }
-                // All other requests (POST mutations) require a valid API key
+                // All other requests (POST mutations, admin submission actions) require a valid key
                 auth.anyRequest().authenticated();
             })
             // Return 401 (not 403) for missing/invalid API key — cleaner REST semantics
-            .exceptionHandling(ex -> ex
-                    .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
-            // Allow H2 console to render in an iframe (dev only — no-op in prod)
-            .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()));
+            .exceptionHandling(ex -> ex.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+            // ── Security response headers ──────────────────────────────────────────
+            .headers(headers -> {
+                // X-Frame-Options:
+                //   SAMEORIGIN in dev so the H2 console (which uses HTML frames) renders correctly.
+                //   DENY in prod — the SPA has no legitimate iframe embedding use case.
+                if (h2ConsoleEnabled) {
+                    headers.frameOptions(frame -> frame.sameOrigin());
+                } else {
+                    headers.frameOptions(frame -> frame.deny());
+                }
+                
+                headers.contentSecurityPolicy(csp -> csp.policyDirectives(
+                        "default-src 'self'; " +
+                        "script-src 'self'; " +
+                        "style-src 'self' 'unsafe-inline'; " +
+                        "img-src 'self' data:; " +
+                        "connect-src 'self'; " +
+                        "font-src 'self'; " +
+                        "frame-ancestors 'none'; " +
+                        "base-uri 'self'; " +
+                        "form-action 'self'"
+                ));
 
+                // HTTP Strict Transport Security — 1-year max-age with subdomains.
+                // Spring Security only sends this header over HTTPS connections
+                // (SecureRequestMatcher check), so it is safe to enable globally;
+                // dev (HTTP) traffic will never receive it.
+                headers.httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31_536_000));
+
+                // Referrer-Policy — send full URL only to same origin; strip it on
+                // cross-origin requests to avoid leaking path info to third-party APIs.
+                headers.referrerPolicy(referrer -> referrer.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN));
+
+                // Permissions-Policy — disable browser features not used by the SPA.
+                // Customizer API removed in Spring Security 6.5+.
+                headers.addHeaderWriter(new StaticHeadersWriter(
+                        "Permissions-Policy",
+                        "camera=(), microphone=(), geolocation=(), payment=()"));
+            });
         return http.build();
     }
 

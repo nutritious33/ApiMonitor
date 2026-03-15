@@ -27,16 +27,10 @@ jobs:
         working-directory: api-monitor
 
       - name: Build Docker image (multi-stage — compiles JAR + React bundle inside Docker)
-        # VITE_API_KEY is passed via --build-arg. GitHub Actions automatically
-        # redacts secret values from log output, so it won't appear in CI logs.
-        # Add VITE_API_KEY to repo Settings → Secrets → Actions.
-        run: |
-          docker build \
-            --build-arg VITE_API_KEY="${VITE_API_KEY}" \
-            -t api-monitor:ci .
+        # No secret build-args needed: the API key is entered by the user at login
+        # and stored in sessionStorage. It is never baked into the JS bundle.
+        run: docker build -t api-monitor:ci .
         working-directory: api-monitor
-        env:
-          VITE_API_KEY: ${{ secrets.VITE_API_KEY }}
 
       - name: Upload test report
         if: always()

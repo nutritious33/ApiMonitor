@@ -23,6 +23,12 @@ import CatalogDropdown from './CatalogDropdown'
 import MonitorCard from './MonitorCard'
 import ClearAllModal from './ClearAllModal'
 import AddCustomEndpointModal from './AddCustomEndpointModal'
+import SubmissionsPanel from './SubmissionsPanel'
+import AdminLoginModal, { checkLockout, clearAuthAttempts } from './AdminLoginModal'
+
+// ── localStorage keys ───────────────────────
+
+const ADMIN_KEY_STORAGE = 'admin_key'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -42,6 +48,11 @@ function saveOrder(order: number[]) {
 
 export default function Dashboard() {
   const qc = useQueryClient()
+
+  // Admin auth state — driven by localStorage, updated on sign-in / sign-out
+  const [adminMode, setAdminMode]   = useState(() => !!localStorage.getItem(ADMIN_KEY_STORAGE))
+  const [lockedOut, setLockedOut]   = useState(checkLockout)
+  const [loginOpen, setLoginOpen]   = useState(false)
 
   // Fetch + auto-poll every 10 s
   const { data: apis = [], isError } = useQuery({
@@ -63,9 +74,28 @@ export default function Dashboard() {
   }, [apis])
 
   // Modal state
-  const [modalOpen, setModalOpen] = useState(false)
+  const [modalOpen, setModalOpen]   = useState(false)
   const [addModalOpen, setAddModalOpen] = useState(false)
-  const [addError, setAddError] = useState<string | null>(null)
+  const [addError, setAddError]     = useState<string | null>(null)
+
+  // ── Admin sign-in / sign-out ────────────────────────────────────────────────
+
+  function handleLoginSuccess(key: string) {
+    localStorage.setItem(ADMIN_KEY_STORAGE, key)
+    clearAuthAttempts()
+    setAdminMode(true)
+    setLoginOpen(false)
+  }
+
+  function handleSignOut() {
+    localStorage.removeItem(ADMIN_KEY_STORAGE)
+    setAdminMode(false)
+  }
+
+  function handleLockout() {
+    setLockedOut(true)
+    setLoginOpen(false)
+  }
 
   // ── Mutations ──────────────────────────────────────────────────────────────
 
@@ -149,9 +179,44 @@ export default function Dashboard() {
       {/* ── Page header ─────────────────────────────────────── */}
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-[1.75rem] font-semibold">API Health Monitor</h1>
-        {isError && (
-          <span className="text-down text-sm">⚠ Unable to reach backend</span>
-        )}
+
+        <div className="flex items-center gap-3">
+          {isError && (
+            <span className="text-down text-sm">⚠ Unable to reach backend</span>
+          )}
+
+          {/* Admin area — hidden when locked out */}
+          {!lockedOut && (
+            adminMode ? (
+              /* Signed-in state */
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted font-mono select-none">Admin ●</span>
+                <button
+                  onClick={handleSignOut}
+                  className="text-xs text-muted hover:text-neutral-100 transition-colors underline-offset-2 hover:underline"
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              /* Signed-out state — subtle lock icon */
+              <button
+                onClick={() => setLoginOpen(true)}
+                title="Admin sign in"
+                aria-label="Admin sign in"
+                className="text-neutral-600 hover:text-neutral-400 transition-colors p-1 rounded"
+              >
+                {/* Lock icon (inline SVG — no extra dependency) */}
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"
+                  className="w-4 h-4">
+                  <path fillRule="evenodd"
+                    d="M10 1a4.5 4.5 0 0 0-4.5 4.5V9H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-.5V5.5A4.5 4.5 0 0 0 10 1Zm3 8V5.5a3 3 0 1 0-6 0V9h6Z"
+                    clipRule="evenodd" />
+                </svg>
+              </button>
+            )
+          )}
+        </div>
       </div>
 
       {/* ── Leaderboard ─────────────────────────────────────── */}
@@ -170,6 +235,9 @@ export default function Dashboard() {
         />
       </section>
 
+      {/* ── Pending Submissions (admin only) ─────────────────── */}
+      {adminMode && <SubmissionsPanel />}
+
       {/* ── Active Monitor ───────────────────────────────────── */}
       <section>
         <div className="flex justify-between items-center border-b border-line pb-2 mb-6">
@@ -180,7 +248,7 @@ export default function Dashboard() {
                 font-semibold rounded-md transition-colors text-sm border border-line"
               onClick={() => { setAddError(null); setAddModalOpen(true) }}
             >
-              + Add Custom API
+              {adminMode ? '+ Add Custom API' : '+ Suggest an API'}
             </button>
             {activeApis.length > 0 && (
               <button
@@ -225,7 +293,7 @@ export default function Dashboard() {
         )}
       </section>
 
-      {/* ── Confirmation modal ───────────────────────────────── */}
+      {/* ── Clear All confirmation modal (all users) ──────────── */}
       <ClearAllModal
         isOpen={modalOpen}
         isPending={clearAllMutation.isPending}
@@ -233,13 +301,22 @@ export default function Dashboard() {
         onCancel={() => setModalOpen(false)}
       />
 
-      {/* ── Add custom endpoint modal ────────────────────────── */}
+      {/* ── Add / Suggest modal ──────────────────────────────── */}
       <AddCustomEndpointModal
         isOpen={addModalOpen}
+        isAdmin={adminMode}
         isPending={addCustomMutation.isPending}
         errorMessage={addError}
         onConfirm={(name, url) => addCustomMutation.mutate({ name, url })}
         onCancel={() => { setAddModalOpen(false); setAddError(null) }}
+      />
+
+      {/* ── Admin login modal ─────────────────────────────────── */}
+      <AdminLoginModal
+        isOpen={loginOpen}
+        onSuccess={handleLoginSuccess}
+        onClose={() => setLoginOpen(false)}
+        onLockout={handleLockout}
       />
     </div>
   )

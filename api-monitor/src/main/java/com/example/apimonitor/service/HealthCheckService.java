@@ -96,23 +96,23 @@ public class HealthCheckService {
                     throw new IllegalArgumentException("URL resolves to a private/internal address: " + url);
                 }
             }
-        } catch (UnknownHostException e) {
-            throw new IllegalArgumentException("URL hostname could not be resolved: " + host);
-        }
+        } catch (UnknownHostException e) { throw new IllegalArgumentException("URL hostname could not be resolved: " + host); }
     }
 
     public void checkSingleEndpoint(ApiEndpoint endpoint) {
         try {
             validateUrl(endpoint.getUrl());
         } catch (IllegalArgumentException e) {
-            log.warn("Skipping endpoint id={} name='{}': {}", endpoint.getId(), endpoint.getName(), e.getMessage());
+            log.warn("Skipping endpoint id={} name='{}': {}",
+                    endpoint.getId(), sanitizeForLog(endpoint.getName()), e.getMessage());
             return;
         }
 
         endpoint.setTotalChecks(endpoint.getTotalChecks() + 1);
         long startTime = System.currentTimeMillis();
 
-        log.debug("Checking endpoint id={} name='{}' url='{}'", endpoint.getId(), endpoint.getName(), endpoint.getUrl());
+        log.debug("Checking endpoint id={} name='{}' url='{}'",
+                endpoint.getId(), sanitizeForLog(endpoint.getName()), sanitizeForLog(endpoint.getUrl()));
 
         webClient.get()
                 .uri(endpoint.getUrl())
@@ -126,10 +126,12 @@ public class HealthCheckService {
                             if (response.getStatusCode().is2xxSuccessful()) {
                                 endpoint.setCurrentStatus("UP");
                                 endpoint.setSuccessfulChecks(endpoint.getSuccessfulChecks() + 1);
-                                log.debug("Endpoint id={} name='{}' is UP ({}ms)", endpoint.getId(), endpoint.getName(), latency);
+                                log.debug("Endpoint id={} name='{}' is UP ({}ms)",
+                                        endpoint.getId(), sanitizeForLog(endpoint.getName()), latency);
                             } else {
                                 endpoint.setCurrentStatus("DOWN");
-                                log.warn("Endpoint id={} name='{}' is DOWN — HTTP {}", endpoint.getId(), endpoint.getName(), response.getStatusCode());
+                                log.warn("Endpoint id={} name='{}' is DOWN — HTTP {}",
+                                        endpoint.getId(), sanitizeForLog(endpoint.getName()), response.getStatusCode());
                             }
                             apiEndpointRepository.save(endpoint);
                         },
@@ -138,10 +140,20 @@ public class HealthCheckService {
                             endpoint.setLastLatencyMs(latency);
                             endpoint.setLastCheckedAt(LocalDateTime.now(ZoneOffset.UTC));
                             endpoint.setCurrentStatus("DOWN");
-                            log.warn("Endpoint id={} name='{}' is DOWN — {}", endpoint.getId(), endpoint.getName(), error.getMessage());
+                            log.warn("Endpoint id={} name='{}' is DOWN — {}",
+                                    endpoint.getId(), sanitizeForLog(endpoint.getName()), error.getMessage());
                             apiEndpointRepository.save(endpoint);
                         }
                 );
+    }
+
+    /**
+     * Strips CR/LF from a value before writing it to a log entry, preventing
+     * log-injection attacks where a crafted URL path or name containing newline
+     * sequences could forge additional log lines.
+     */
+    private static String sanitizeForLog(String value) {
+        return (value == null) ? null : value.replace('\n', ' ').replace('\r', ' ');
     }
 
     @Scheduled(fixedRateString = "${monitor.check-interval-ms:60000}")

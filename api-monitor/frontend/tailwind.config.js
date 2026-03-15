@@ -3,12 +3,14 @@ export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
-      // Exact palette from the original vanilla JS design
       colors: {
         base:    '#0a0a0a',
         card:    '#171717',
         surface: '#262626',
         muted:   '#a3a3a3',
+        'rank-gold':   '#FBBF24',
+        'rank-silver': '#D2D5D9',
+        'rank-bronze': '#FAA95F',
         accent: {
           DEFAULT: '#3b82f6',
           hover:   '#2563eb',

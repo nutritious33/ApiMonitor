@@ -20,15 +20,6 @@ services:
   api-monitor:
     build:
       context: .
-      args:
-        # Bakes the API key into the React bundle at build time.
-        # Docker Compose reads SECRET_SECURITY_KEY from .env automatically.
-        #
-        # KEY ROTATION: After changing SECRET_SECURITY_KEY in .env, rebuild with:
-        #   docker compose build --no-cache && docker compose up -d
-        VITE_API_KEY: ${SECRET_SECURITY_KEY}
-    ports:
-      - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,11 +31,17 @@ services:
       API_SECURITY_KEY: ${SECRET_SECURITY_KEY}
       TUNNEL_TOKEN: ${TUNNEL_TOKEN}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080}
+      # ── Email notifications (optional — omit or leave blank to disable) ─────
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_TO: ${MAIL_TO:-}
     networks:
       - monitor-net
 
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared:2025.4.0
     container_name: cloudflared-tunnel
     restart: unless-stopped
     depends_on:

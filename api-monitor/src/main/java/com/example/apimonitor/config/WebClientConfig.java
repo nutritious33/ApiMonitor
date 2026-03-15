@@ -18,6 +18,12 @@ public class WebClientConfig {
     @Bean
     public WebClient.Builder webClientBuilder() {
         HttpClient httpClient = HttpClient.create()
+                // SsrfSafeAddressResolverGroup validates every IP returned by DNS against
+                // the same private-range blocklist used in HealthCheckService.validateUrl().
+                // This closes the DNS-rebinding TOCTOU window: even if a domain's DNS
+                // record is changed to a private IP between validateUrl() and this
+                // connection attempt, Netty will refuse to connect.
+                .resolver(SsrfSafeAddressResolverGroup.INSTANCE)
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5_000)
                 .responseTimeout(Duration.ofSeconds(10))
                 .doOnConnected(conn -> conn
