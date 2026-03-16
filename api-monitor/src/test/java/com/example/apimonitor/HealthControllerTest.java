@@ -1,7 +1,6 @@
 package com.example.apimonitor;
 
 import com.example.apimonitor.controller.HealthController;
-import com.example.apimonitor.dto.ApiEndpointDTO;
 import com.example.apimonitor.entity.ApiEndpoint;
 import com.example.apimonitor.repository.ApiEndpointRepository;
 import com.example.apimonitor.service.HealthCheckService;
@@ -28,18 +27,16 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * Slice test for {@link HealthController} — only the web layer is loaded.
- * Security is included so we can verify that unauthenticated POSTs are rejected.
+ * Security is included so we can verify authentication rules.
  */
 @WebMvcTest(HealthController.class)
 @Import(SecurityConfig.class)
 @ActiveProfiles("test")
-// Explicitly supply api.security.key so SecurityConfig can inject it regardless
-// of how the @WebMvcTest slice context processes profile-specific properties.
 @TestPropertySource(properties = "api.security.key=test-api-key")
 class HealthControllerTest {
 
     static final String API_KEY_HEADER = "X-API-Key";
-    static final String VALID_KEY      = "test-api-key";  // matches application-test.properties
+    static final String VALID_KEY      = "test-api-key";
 
     @Autowired MockMvc mockMvc;
 
@@ -99,17 +96,33 @@ class HealthControllerTest {
                 .andExpect(jsonPath("$.message").exists());
     }
 
+    /**
+     * Activate is permitAll — verifies that no API key is required.
+     */
     @Test
-    void activateEndpoint_returns401WithoutApiKey() throws Exception {
+    void activateEndpoint_succeedsWithoutApiKey() throws Exception {
+        ApiEndpoint endpoint = makeEndpoint(1L, "GitHub Zen", false);
+        when(repository.findById(1L)).thenReturn(Optional.of(endpoint));
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
         mockMvc.perform(post("/api/health-metrics/activate/1"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isActive", is(true)));
     }
 
+    /**
+     * Activate is permitAll — a wrong key is ignored and the request succeeds normally.
+     */
     @Test
-    void activateEndpoint_returns401WithWrongApiKey() throws Exception {
+    void activateEndpoint_succeedsWithWrongApiKey() throws Exception {
+        ApiEndpoint endpoint = makeEndpoint(1L, "GitHub Zen", false);
+        when(repository.findById(1L)).thenReturn(Optional.of(endpoint));
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
         mockMvc.perform(post("/api/health-metrics/activate/1")
                         .header(API_KEY_HEADER, "wrong-key"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isActive", is(true)));
     }
 
     // ── POST /api/health-metrics/deactivate/{id} ───────────────────────────
@@ -139,27 +152,24 @@ class HealthControllerTest {
 
     @Test
     void deactivateAll_deactivatesAllActiveEndpoints() throws Exception {
-        ApiEndpoint e1 = makeEndpoint(1L, "A", true);
-        ApiEndpoint e2 = makeEndpoint(2L, "B", true);
-        when(repository.findByIsActiveTrue()).thenReturn(List.of(e1, e2));
-        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(repository.deactivateAll()).thenReturn(2);
 
         mockMvc.perform(post("/api/health-metrics/deactivate/all")
                         .header(API_KEY_HEADER, VALID_KEY))
                 .andExpect(status().isOk());
 
-        verify(repository, times(2)).save(any());
+        verify(repository).deactivateAll();
     }
 
     @Test
     void deactivateAll_isIdempotentWhenNoneActive() throws Exception {
-        when(repository.findByIsActiveTrue()).thenReturn(List.of());
+        when(repository.deactivateAll()).thenReturn(0);
 
         mockMvc.perform(post("/api/health-metrics/deactivate/all")
                         .header(API_KEY_HEADER, VALID_KEY))
                 .andExpect(status().isOk());
 
-        verify(repository, never()).save(any());
+        verify(repository).deactivateAll();
     }
 
     // ── helpers ────────────────────────────────────────────────────────────

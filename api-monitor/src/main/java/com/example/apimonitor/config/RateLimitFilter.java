@@ -1,6 +1,7 @@
 package com.example.apimonitor.config;
 
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,6 +17,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -59,14 +61,22 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private final ConcurrentHashMap<String, Window> buckets = new ConcurrentHashMap<>();
     private record Window(AtomicInteger count, long windowStart) {}
+    private ScheduledExecutorService cleanupExecutor;
 
     @PostConstruct
     void startCleanup() {
-        Executors.newSingleThreadScheduledExecutor(r -> {
+        cleanupExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "rate-limit-cleanup");
             t.setDaemon(true);
             return t;
-        }).scheduleAtFixedRate(this::evictStale, 1, 1, TimeUnit.MINUTES);
+        });
+        cleanupExecutor.scheduleAtFixedRate(this::evictStale, 1, 1, TimeUnit.MINUTES);
+    }
+
+    /** Shuts down the cleanup thread gracefully on context close, preventing thread leaks. */
+    @PreDestroy
+    void stopCleanup() {
+        if (cleanupExecutor != null) { cleanupExecutor.shutdown(); }
     }
 
     @Override

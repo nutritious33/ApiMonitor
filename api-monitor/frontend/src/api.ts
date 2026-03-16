@@ -1,28 +1,25 @@
 import axios from 'axios'
 import type { ApiEndpoint, PendingSubmission, SubmissionStatusResponse } from './types'
 
-// ── Admin auth ────────────────────────────────────────────────────────────────
-// Admin: set key once via DevTools: localStorage.setItem('admin_key', 'your-key')
-// Refresh the page after setting. The key is never baked into the bundle.
-const ADMIN_KEY_STORAGE = 'admin_key'
+// ── CSRF helper ────────────────────────────────────────────────────────────────
 
-export function getAdminKey(): string | null {
-  return localStorage.getItem(ADMIN_KEY_STORAGE)
+/** Reads a cookie value by name from document.cookie. Returns null if absent. */
+function getCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'))
+  return match ? decodeURIComponent(match[1]) : null
 }
 
-export function isAdmin(): boolean {
-  return !!getAdminKey()
-}
+// ── Authenticated client ───────────────────────────────────────────────────────
+//
+// Sends the admin_session httpOnly cookie automatically (withCredentials) and
+// adds the XSRF-TOKEN cookie value as X-XSRF-TOKEN for CSRF protection.
+// The browser sets XSRF-TOKEN on the first GET response from the server.
 
-/**
- * Authenticated axios client — attaches X-API-Key from localStorage on every
- * request. Used for all admin/write operations.
- */
-const client = axios.create()
+const client = axios.create({ withCredentials: true })
 
 client.interceptors.request.use(config => {
-  const key = getAdminKey()
-  if (key) config.headers['X-API-Key'] = key
+  const xsrf = getCookie('XSRF-TOKEN')
+  if (xsrf) config.headers['X-XSRF-TOKEN'] = xsrf
   return config
 })
 
@@ -71,14 +68,25 @@ export const submitEndpoint = (
 export const getSubmissionStatus = (token: string): Promise<SubmissionStatusResponse> =>
   axios.get<SubmissionStatusResponse>(`/api/submissions/${token}`).then(r => r.data)
 
-// ── Admin: key validation ──────────────────────────────────────────────────────
+// ── Admin: session management ─────────────────────────────────────────────────
 
 /**
  * Validates a candidate API key against the server.
- * Resolves (void) on 204 if the key is correct.
+ * On 204 the server sets an httpOnly admin_session cookie.
  * Rejects with an AxiosError (status 401) if the key is wrong.
- * Uses plain axios — not the interceptor-attached client — so the key under
- * test is sent explicitly rather than being pulled from localStorage.
+ * Uses the credentialed client so the Set-Cookie response is accepted by the
+ * browser and the XSRF token is included for CSRF protection.
  */
 export const pingAdminKey = (key: string): Promise<void> =>
-  axios.get('/api/auth/ping', { headers: { 'X-API-Key': key } }).then(() => undefined)
+  client.post('/api/auth/ping', null, { headers: { 'X-API-Key': key } }).then(() => undefined)
+
+/**
+ * Returns true if the current browser session has a valid admin_session cookie.
+ * Called on page load to restore admin UI without storing the key in localStorage.
+ */
+export const getAdminStatus = (): Promise<boolean> =>
+  client.get<{ admin: boolean }>('/api/auth/status').then(r => r.data.admin)
+
+/** Ends the admin session server-side and clears the admin_session cookie. */
+export const logoutAdmin = (): Promise<void> =>
+  client.post('/api/auth/logout').then(() => undefined)

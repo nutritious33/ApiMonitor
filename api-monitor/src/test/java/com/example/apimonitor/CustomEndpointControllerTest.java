@@ -2,10 +2,12 @@ package com.example.apimonitor;
 
 import com.example.apimonitor.config.SecurityConfig;
 import com.example.apimonitor.controller.CustomEndpointController;
+import com.example.apimonitor.dto.ApiEndpointDTO;
 import com.example.apimonitor.entity.ApiEndpoint;
 import com.example.apimonitor.entity.ApiEndpointSource;
-import com.example.apimonitor.repository.ApiEndpointRepository;
-import com.example.apimonitor.service.HealthCheckService;
+import com.example.apimonitor.exception.TooManyEndpointsException;
+import com.example.apimonitor.service.CustomEndpointService;
+import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -16,8 +18,6 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.Optional;
-
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -25,12 +25,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Slice test for {@link CustomEndpointController}.
+ * Business logic is owned by {@link CustomEndpointService}, which is mocked here.
  */
 @WebMvcTest(CustomEndpointController.class)
 @Import(SecurityConfig.class)
 @ActiveProfiles("test")
-// Explicitly supply api.security.key so SecurityConfig can inject it regardless
-// of how the @WebMvcTest slice context processes profile-specific properties.
 @TestPropertySource(properties = "api.security.key=test-api-key")
 class CustomEndpointControllerTest {
 
@@ -39,20 +38,14 @@ class CustomEndpointControllerTest {
 
     @Autowired MockMvc mockMvc;
 
-    @MockitoBean ApiEndpointRepository repository;
-    @MockitoBean HealthCheckService healthCheckService;
+    @MockitoBean CustomEndpointService customEndpointService;
 
     // ── POST /api/custom-endpoints ─────────────────────────────────────────
 
     @Test
     void addCustomEndpoint_returns201WhenValid() throws Exception {
-        when(repository.countBySource(ApiEndpointSource.CUSTOM)).thenReturn(0L);
-        when(repository.save(any())).thenAnswer(inv -> {
-            ApiEndpoint e = inv.getArgument(0);
-            e.setId(99L);
-            return e;
-        });
-        doNothing().when(healthCheckService).validateUrl(any());
+        ApiEndpointDTO dto = ApiEndpointDTO.from(makeCustomEndpoint(99L, "My API"));
+        when(customEndpointService.addCustomEndpoint(any(), any())).thenReturn(dto);
 
         mockMvc.perform(post("/api/custom-endpoints")
                         .header(API_KEY_HEADER, VALID_KEY)
@@ -64,8 +57,7 @@ class CustomEndpointControllerTest {
                 .andExpect(jsonPath("$.id").value(99))
                 .andExpect(jsonPath("$.source").value("CUSTOM"));
 
-        verify(healthCheckService).validateUrl("https://example.com/health");
-        verify(healthCheckService).checkSingleEndpoint(any());
+        verify(customEndpointService).addCustomEndpoint("My API", "https://example.com/health");
     }
 
     @Test
@@ -102,7 +94,8 @@ class CustomEndpointControllerTest {
 
     @Test
     void addCustomEndpoint_returns429WhenCapReached() throws Exception {
-        when(repository.countBySource(ApiEndpointSource.CUSTOM)).thenReturn(10L);
+        when(customEndpointService.addCustomEndpoint(any(), any()))
+                .thenThrow(new TooManyEndpointsException("Custom endpoint limit of 10 has been reached"));
 
         mockMvc.perform(post("/api/custom-endpoints")
                         .header(API_KEY_HEADER, VALID_KEY)
@@ -113,14 +106,13 @@ class CustomEndpointControllerTest {
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.message").exists());
 
-        verify(repository, never()).save(any());
+        verify(customEndpointService).addCustomEndpoint(any(), any());
     }
 
     @Test
     void addCustomEndpoint_returns400WhenUrlFailsValidation() throws Exception {
-        when(repository.countBySource(ApiEndpointSource.CUSTOM)).thenReturn(0L);
-        doThrow(new IllegalArgumentException("Only HTTPS URLs are permitted"))
-                .when(healthCheckService).validateUrl(any());
+        when(customEndpointService.addCustomEndpoint(any(), any()))
+                .thenThrow(new IllegalArgumentException("Only HTTPS URLs are permitted"));
 
         mockMvc.perform(post("/api/custom-endpoints")
                         .header(API_KEY_HEADER, VALID_KEY)
@@ -136,19 +128,19 @@ class CustomEndpointControllerTest {
 
     @Test
     void deleteCustomEndpoint_returns204WhenFound() throws Exception {
-        ApiEndpoint e = makeCustomEndpoint(5L, "My API");
-        when(repository.findById(5L)).thenReturn(Optional.of(e));
+        doNothing().when(customEndpointService).deleteCustomEndpoint(5L);
 
         mockMvc.perform(delete("/api/custom-endpoints/5")
                         .header(API_KEY_HEADER, VALID_KEY))
                 .andExpect(status().isNoContent());
 
-        verify(repository).delete(e);
+        verify(customEndpointService).deleteCustomEndpoint(5L);
     }
 
     @Test
     void deleteCustomEndpoint_returns404WhenNotFound() throws Exception {
-        when(repository.findById(99L)).thenReturn(Optional.empty());
+        doThrow(new EntityNotFoundException("Custom endpoint not found: 99"))
+                .when(customEndpointService).deleteCustomEndpoint(99L);
 
         mockMvc.perform(delete("/api/custom-endpoints/99")
                         .header(API_KEY_HEADER, VALID_KEY))
@@ -157,15 +149,12 @@ class CustomEndpointControllerTest {
 
     @Test
     void deleteCustomEndpoint_returns404WhenBuiltin() throws Exception {
-        ApiEndpoint builtin = makeCustomEndpoint(1L, "GitHub Zen");
-        builtin.setSource(ApiEndpointSource.BUILTIN);
-        when(repository.findById(1L)).thenReturn(Optional.of(builtin));
+        doThrow(new EntityNotFoundException("Custom endpoint not found: 1"))
+                .when(customEndpointService).deleteCustomEndpoint(1L);
 
         mockMvc.perform(delete("/api/custom-endpoints/1")
                         .header(API_KEY_HEADER, VALID_KEY))
                 .andExpect(status().isNotFound());
-
-        verify(repository, never()).delete(any());
     }
 
     @Test

@@ -35,6 +35,10 @@ public class PendingSubmission {
     @Column(nullable = false, unique = true, length = 36)
     private String submissionToken;
 
+    /** Submitter IP address — used for per-IP spam rate limiting on POST /api/submissions. */
+    @Column(nullable = false, length = 45)
+    private String submitterIp = "";
+
     // ── Accessors ─────────────────────────────────────────────────────────────
 
     public Long getId() { return id; }
@@ -53,4 +57,7 @@ public class PendingSubmission {
 
     public String getSubmissionToken() { return submissionToken; }
     public void setSubmissionToken(String submissionToken) { this.submissionToken = submissionToken; }
+
+    public String getSubmitterIp() { return submitterIp; }
+    public void setSubmitterIp(String submitterIp) { this.submitterIp = submitterIp; }
 }

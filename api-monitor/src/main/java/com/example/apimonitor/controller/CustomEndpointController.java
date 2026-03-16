@@ -1,25 +1,17 @@
 package com.example.apimonitor.controller;
 
 import com.example.apimonitor.dto.ApiEndpointDTO;
-import com.example.apimonitor.entity.ApiEndpoint;
-import com.example.apimonitor.entity.ApiEndpointSource;
-import com.example.apimonitor.exception.TooManyEndpointsException;
-import com.example.apimonitor.repository.ApiEndpointRepository;
-import com.example.apimonitor.service.HealthCheckService;
+import com.example.apimonitor.service.CustomEndpointService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -34,7 +26,6 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Custom Endpoints", description = "User-submitted API endpoints for monitoring")
 public class CustomEndpointController {
 
-    private static final Logger log = LoggerFactory.getLogger(CustomEndpointController.class);
     record AddCustomEndpointRequest(
             @NotBlank(message = "name must not be blank")
             @Size(max = 100, message = "name must not exceed 100 characters")
@@ -50,15 +41,10 @@ public class CustomEndpointController {
             String url
     ) {}
 
-    private final ApiEndpointRepository apiEndpointRepository;
-    private final HealthCheckService healthCheckService;
+    private final CustomEndpointService customEndpointService;
 
-    @Value("${monitor.max-custom-endpoints:10}")
-    private int maxCustomEndpoints;
-
-    public CustomEndpointController(ApiEndpointRepository apiEndpointRepository, HealthCheckService healthCheckService) {
-        this.apiEndpointRepository = apiEndpointRepository;
-        this.healthCheckService = healthCheckService;
+    public CustomEndpointController(CustomEndpointService customEndpointService) {
+        this.customEndpointService = customEndpointService;
     }
 
     @PostMapping
@@ -70,43 +56,10 @@ public class CustomEndpointController {
             @ApiResponse(responseCode = "400", description = "Invalid URL or request body"),
             @ApiResponse(responseCode = "429", description = "Global custom endpoint cap reached")
     })
-    // synchronized eliminates the TOCTOU race between countBySource() and save().
-    // Without this, concurrent requests could all read a count below the cap and
-    // all proceed to insert, exceeding the max-custom-endpoints limit.
-    public synchronized ResponseEntity<ApiEndpointDTO> addCustomEndpoint(
+    public ResponseEntity<ApiEndpointDTO> addCustomEndpoint(
             @Valid @RequestBody AddCustomEndpointRequest request) {
-
-        long currentCount = apiEndpointRepository.countBySource(ApiEndpointSource.CUSTOM);
-        if (currentCount >= maxCustomEndpoints) {
-            throw new TooManyEndpointsException(
-                    "Custom endpoint limit of " + maxCustomEndpoints + " has been reached");
-        }
-
-        // Normalise whitespace before the uniqueness check
-        String trimmedName = request.name().strip();
-
-        // Uniqueness check — case-insensitive, across BUILTIN and CUSTOM alike
-        if (apiEndpointRepository.findByNameIgnoreCase(trimmedName).isPresent()) {
-            throw new IllegalArgumentException(
-                    "An endpoint named '" + trimmedName + "' already exists");
-        }
-
-        // SSRF + URL length validation (throws IllegalArgumentException → 400)
-        healthCheckService.validateUrl(request.url());
-
-        ApiEndpoint endpoint = new ApiEndpoint();
-        endpoint.setName(trimmedName);
-        endpoint.setUrl(request.url());
-        endpoint.setIsActive(true);
-        endpoint.setSource(ApiEndpointSource.CUSTOM);
-        ApiEndpoint saved = apiEndpointRepository.save(endpoint);
-
-        // Trigger an immediate health check (async — does not block the response)
-        healthCheckService.checkSingleEndpoint(saved);
-
-        log.info("Added custom endpoint id={} name='{}' url='{}'",
-                saved.getId(), sanitizeForLog(saved.getName()), sanitizeForLog(saved.getUrl()));
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiEndpointDTO.from(saved));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(customEndpointService.addCustomEndpoint(request.name(), request.url()));
     }
 
     @DeleteMapping("/{id}")
@@ -119,23 +72,7 @@ public class CustomEndpointController {
     })
     public ResponseEntity<Void> deleteCustomEndpoint(
             @Parameter(description = "Endpoint ID") @PathVariable Long id) {
-
-        ApiEndpoint endpoint = apiEndpointRepository.findById(id)
-                .filter(e -> ApiEndpointSource.CUSTOM.equals(e.getSource()))
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Custom endpoint not found: " + id));
-
-        apiEndpointRepository.delete(endpoint);
-        log.info("Deleted custom endpoint id={} name='{}'", endpoint.getId(), sanitizeForLog(endpoint.getName()));
+        customEndpointService.deleteCustomEndpoint(id);
         return ResponseEntity.noContent().build();
-    }
-
-    /**
-     * Strips CR/LF characters from a string before it is written to a log.
-     * Prevents log-injection attacks where a crafted URL or name containing
-     * newline sequences could forge additional log lines.
-     */
-    private static String sanitizeForLog(String value) {
-        return (value == null) ? null : value.replace('\n', ' ').replace('\r', ' ');
     }
 }

@@ -2,6 +2,7 @@ package com.example.apimonitor.service;
 
 import com.example.apimonitor.entity.ApiEndpoint;
 import com.example.apimonitor.repository.ApiEndpointRepository;
+import com.example.apimonitor.util.LogUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -104,7 +105,7 @@ public class HealthCheckService {
             validateUrl(endpoint.getUrl());
         } catch (IllegalArgumentException e) {
             log.warn("Skipping endpoint id={} name='{}': {}",
-                    endpoint.getId(), sanitizeForLog(endpoint.getName()), e.getMessage());
+                    endpoint.getId(), LogUtil.sanitize(endpoint.getName()), e.getMessage());
             return;
         }
 
@@ -112,7 +113,7 @@ public class HealthCheckService {
         long startTime = System.currentTimeMillis();
 
         log.debug("Checking endpoint id={} name='{}' url='{}'",
-                endpoint.getId(), sanitizeForLog(endpoint.getName()), sanitizeForLog(endpoint.getUrl()));
+                endpoint.getId(), LogUtil.sanitize(endpoint.getName()), LogUtil.sanitize(endpoint.getUrl()));
 
         webClient.get()
                 .uri(endpoint.getUrl())
@@ -127,11 +128,11 @@ public class HealthCheckService {
                                 endpoint.setCurrentStatus("UP");
                                 endpoint.setSuccessfulChecks(endpoint.getSuccessfulChecks() + 1);
                                 log.debug("Endpoint id={} name='{}' is UP ({}ms)",
-                                        endpoint.getId(), sanitizeForLog(endpoint.getName()), latency);
+                                        endpoint.getId(), LogUtil.sanitize(endpoint.getName()), latency);
                             } else {
                                 endpoint.setCurrentStatus("DOWN");
                                 log.warn("Endpoint id={} name='{}' is DOWN — HTTP {}",
-                                        endpoint.getId(), sanitizeForLog(endpoint.getName()), response.getStatusCode());
+                                        endpoint.getId(), LogUtil.sanitize(endpoint.getName()), response.getStatusCode());
                             }
                             apiEndpointRepository.save(endpoint);
                         },
@@ -141,19 +142,10 @@ public class HealthCheckService {
                             endpoint.setLastCheckedAt(LocalDateTime.now(ZoneOffset.UTC));
                             endpoint.setCurrentStatus("DOWN");
                             log.warn("Endpoint id={} name='{}' is DOWN — {}",
-                                    endpoint.getId(), sanitizeForLog(endpoint.getName()), error.getMessage());
+                                    endpoint.getId(), LogUtil.sanitize(endpoint.getName()), error.getMessage());
                             apiEndpointRepository.save(endpoint);
                         }
                 );
-    }
-
-    /**
-     * Strips CR/LF from a value before writing it to a log entry, preventing
-     * log-injection attacks where a crafted URL path or name containing newline
-     * sequences could forge additional log lines.
-     */
-    private static String sanitizeForLog(String value) {
-        return (value == null) ? null : value.replace('\n', ' ').replace('\r', ' ');
     }
 
     @Scheduled(fixedRateString = "${monitor.check-interval-ms:60000}")

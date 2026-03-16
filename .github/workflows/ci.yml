@@ -28,7 +28,7 @@ jobs:
 
       - name: Build Docker image (multi-stage — compiles JAR + React bundle inside Docker)
         # No secret build-args needed: the API key is entered by the user at login
-        # and stored in sessionStorage. It is never baked into the JS bundle.
+        # and stored server-side as an httpOnly session cookie
         run: docker build -t api-monitor:ci .
         working-directory: api-monitor
 

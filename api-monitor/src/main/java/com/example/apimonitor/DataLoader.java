@@ -42,15 +42,27 @@ public class DataLoader implements CommandLineRunner {
                 new TypeReference<List<EndpointConfig>>() {}
         );
 
+        int seeded = 0;
+        int skipped = 0;
         for (EndpointConfig config : configs) {
+            try {
+                healthCheckService.validateUrl(config.url());
+            } catch (IllegalArgumentException e) {
+                log.warn("Skipping seeded endpoint '{}' — invalid URL '{}': {}",
+                        config.name(), config.url(), e.getMessage());
+                skipped++;
+                continue;
+            }
             ApiEndpoint saved = saveEndpoint(config.name(), config.url(), config.active());
             if (config.active()) {
                 healthCheckService.checkSingleEndpoint(saved);
             }
+            seeded++;
         }
 
-        long activeCount = configs.stream().filter(EndpointConfig::active).count();
-        log.info("DataLoader seeded {} endpoint(s), {} active", configs.size(), activeCount);
+        long activeCount = apiEndpointRepository.findByIsActiveTrue().size();
+        log.info("DataLoader seeded {} endpoint(s) ({} skipped due to invalid URL), {} active",
+                seeded, skipped, activeCount);
     }
 
     private ApiEndpoint saveEndpoint(String name, String url, boolean isActive) {

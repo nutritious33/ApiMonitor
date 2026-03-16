@@ -8,13 +8,11 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -49,8 +47,7 @@ public class HealthController {
     }
 
     @PostMapping("/activate/{id}")
-    @Operation(summary = "Activate monitoring", description = "Starts monitoring for the given endpoint and triggers an immediate health check",
-               security = @SecurityRequirement(name = "apiKey"))
+    @Operation(summary = "Activate monitoring", description = "Starts monitoring for the given endpoint and triggers an immediate health check")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Endpoint activated"),
             @ApiResponse(responseCode = "404", description = "Endpoint not found")
@@ -67,8 +64,7 @@ public class HealthController {
     }
 
     @PostMapping("/deactivate/{id}")
-    @Operation(summary = "Deactivate monitoring", description = "Stops monitoring for the given endpoint",
-               security = @SecurityRequirement(name = "apiKey"))
+    @Operation(summary = "Deactivate monitoring", description = "Stops monitoring for the given endpoint")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Endpoint deactivated"),
             @ApiResponse(responseCode = "404", description = "Endpoint not found")
@@ -84,17 +80,12 @@ public class HealthController {
     }
 
     @PostMapping("/deactivate/all")
-    @Transactional
-    @Operation(summary = "Deactivate all endpoints", description = "Stops monitoring for every currently active endpoint",
-               security = @SecurityRequirement(name = "apiKey"))
+    @Operation(summary = "Deactivate all endpoints",
+               description = "Stops monitoring for every currently active endpoint in a single query")
     @ApiResponse(responseCode = "200", description = "All endpoints deactivated")
     public ResponseEntity<Void> deactivateAllEndpoints() {
-        List<ApiEndpoint> active = apiEndpointRepository.findByIsActiveTrue();
-        active.forEach(endpoint -> {
-            endpoint.setIsActive(false);
-            apiEndpointRepository.save(endpoint);
-        });
-        log.info("Deactivated all {} active endpoint(s)", active.size());
+        int count = apiEndpointRepository.deactivateAll();
+        log.info("Deactivated all {} active endpoint(s)", count);
         return ResponseEntity.ok().build();
     }
 }

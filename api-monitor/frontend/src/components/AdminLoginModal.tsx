@@ -1,82 +1,24 @@
 import { useState } from 'react'
 import { pingAdminKey } from '../api'
+import { checkLockout, clearAuthAttempts, recordFailedAttempt } from '../auth'
 
-// ── localStorage keys ──────────────────────────────────────────────────────────
-
-const ATTEMPTS_KEY = 'admin_auth_attempts'   // { count: number, windowStart: number }
-const LOCKOUT_KEY  = 'admin_auth_lockout'    // expiry timestamp (ms)
-
-const MAX_ATTEMPTS   = 10
-const WINDOW_MS      = 10 * 60 * 1000   // 10 minutes
-const LOCKOUT_MS     = 60 * 60 * 1000   // 1 hour
-
-// ── Helpers (exported for Dashboard to use on mount) ──────────────────────────
-
-/** Returns true if the user is currently locked out. Clears an expired lockout. */
-export function checkLockout(): boolean {
-  const raw = localStorage.getItem(LOCKOUT_KEY)
-  if (!raw) return false
-  if (Date.now() > Number(raw)) {
-    localStorage.removeItem(LOCKOUT_KEY)
-    localStorage.removeItem(ATTEMPTS_KEY)
-    return false
-  }
-  return true
-}
-
-/** Clears attempt counters and any lockout — call on successful authentication. */
-export function clearAuthAttempts() {
-  localStorage.removeItem(ATTEMPTS_KEY)
-  localStorage.removeItem(LOCKOUT_KEY)
-}
-
-// ── Internal helpers ───────────────────────────────────────────────────────────
-
-function getAttempts(): { count: number; windowStart: number } {
-  try {
-    return JSON.parse(localStorage.getItem(ATTEMPTS_KEY) ?? 'null') ??
-      { count: 0, windowStart: Date.now() }
-  } catch {
-    return { count: 0, windowStart: Date.now() }
-  }
-}
-
-/**
- * Records one failed attempt.
- * Returns true if the limit is now exceeded (caller should trigger lockout).
- * Only call this on an explicit 401 — network errors do NOT count.
- */
-function recordFailedAttempt(): boolean {
-  const now  = Date.now()
-  const data = getAttempts()
-
-  const fresh = now - data.windowStart > WINDOW_MS
-    ? { count: 1, windowStart: now }          // reset: previous window has expired
-    : { ...data, count: data.count + 1 }       // accumulate within current window
-
-  localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(fresh))
-
-  if (fresh.count >= MAX_ATTEMPTS) {
-    localStorage.setItem(LOCKOUT_KEY, String(now + LOCKOUT_MS))
-    return true
-  }
-  return false
-}
+// Re-export so existing Dashboard imports keep working without touching that file's imports.
+export { checkLockout, clearAuthAttempts }
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
 interface Props {
   isOpen: boolean
-  /** Called with the validated key so the parent can store it and update state. */
-  onSuccess: (key: string) => void
+  /** Called after a successful ping (session cookie already set by server). */
+  onSuccess: () => void
   onClose: () => void
   /** Called when the rate-limit threshold is exceeded (parent should hide the button). */
   onLockout: () => void
 }
 
 export default function AdminLoginModal({ isOpen, onSuccess, onClose, onLockout }: Props) {
-  const [key, setKey]       = useState('')
-  const [error, setError]   = useState<string | null>(null)
+  const [key, setKey]         = useState('')
+  const [error, setError]     = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   if (!isOpen) return null
@@ -90,10 +32,9 @@ export default function AdminLoginModal({ isOpen, onSuccess, onClose, onLockout 
 
     try {
       await pingAdminKey(key.trim())
-      // 204 — success
-      clearAuthAttempts()
+      // 204 — success; server has set the httpOnly admin_session cookie
       setKey('')
-      onSuccess(key.trim())
+      onSuccess()
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
 

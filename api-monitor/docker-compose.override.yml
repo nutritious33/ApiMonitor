@@ -1,0 +1,10 @@
+# Local development override — picked up automatically by `docker compose up`.
+# Exposes the backend on host port 8080 so the Vite dev server (npm run dev)
+# can proxy /api requests to it without rebuilding the container.
+#
+# Do NOT commit docker-compose.override.yml if it ever contains secrets.
+# This file is safe to commit — it only adds a port binding.
+services:
+  api-monitor:
+    ports:
+      - "8080:8080"

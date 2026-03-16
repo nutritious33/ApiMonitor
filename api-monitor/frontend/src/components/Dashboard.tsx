@@ -25,10 +25,7 @@ import ClearAllModal from './ClearAllModal'
 import AddCustomEndpointModal from './AddCustomEndpointModal'
 import SubmissionsPanel from './SubmissionsPanel'
 import AdminLoginModal, { checkLockout, clearAuthAttempts } from './AdminLoginModal'
-
-// ── localStorage keys ───────────────────────
-
-const ADMIN_KEY_STORAGE = 'admin_key'
+import { isAdminSession, logout } from '../auth'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -49,10 +46,15 @@ function saveOrder(order: number[]) {
 export default function Dashboard() {
   const qc = useQueryClient()
 
-  // Admin auth state — driven by localStorage, updated on sign-in / sign-out
-  const [adminMode, setAdminMode]   = useState(() => !!localStorage.getItem(ADMIN_KEY_STORAGE))
-  const [lockedOut, setLockedOut]   = useState(checkLockout)
-  const [loginOpen, setLoginOpen]   = useState(false)
+  // Admin auth state — driven by the server-side admin_session cookie.
+  const [adminMode, setAdminMode] = useState(false)
+  const [lockedOut, setLockedOut] = useState(checkLockout)
+  const [loginOpen, setLoginOpen] = useState(false)
+
+  // On mount: restore admin mode from the session cookie (server-side check).
+  useEffect(() => {
+    isAdminSession().then(setAdminMode)
+  }, [])
 
   // Fetch + auto-poll every 10 s
   const { data: apis = [], isError } = useQuery({
@@ -80,15 +82,14 @@ export default function Dashboard() {
 
   // ── Admin sign-in / sign-out ────────────────────────────────────────────────
 
-  function handleLoginSuccess(key: string) {
-    localStorage.setItem(ADMIN_KEY_STORAGE, key)
+  function handleLoginSuccess() {
     clearAuthAttempts()
     setAdminMode(true)
     setLoginOpen(false)
   }
 
-  function handleSignOut() {
-    localStorage.removeItem(ADMIN_KEY_STORAGE)
+  async function handleSignOut() {
+    await logout()
     setAdminMode(false)
   }
 

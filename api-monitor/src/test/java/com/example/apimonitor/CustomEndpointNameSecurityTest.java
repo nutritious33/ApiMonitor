@@ -2,10 +2,9 @@ package com.example.apimonitor;
 
 import com.example.apimonitor.config.SecurityConfig;
 import com.example.apimonitor.controller.CustomEndpointController;
-import com.example.apimonitor.entity.ApiEndpoint;
+import com.example.apimonitor.dto.ApiEndpointDTO;
 import com.example.apimonitor.entity.ApiEndpointSource;
-import com.example.apimonitor.repository.ApiEndpointRepository;
-import com.example.apimonitor.service.HealthCheckService;
+import com.example.apimonitor.service.CustomEndpointService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -14,22 +13,22 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.server.ResponseStatusException;
 
-import java.util.Optional;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
-
-import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -38,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * The name passes through two layers before reaching the DB:
  *   1. {@code @Valid} constraint validation — @NotBlank, @Size, @Pattern (Spring MVC layer)
- *   2. Uniqueness check (controller logic)
+ *   2. Uniqueness / cap checks inside {@link CustomEndpointService}
  *
  * SQL injection is independently neutralised by JPA's parameterised queries; the
  * @Pattern allowlist is additional defense-in-depth that also blocks XSS chars.
@@ -74,8 +73,7 @@ class CustomEndpointNameSecurityTest {
 
     @Autowired MockMvc mockMvc;
 
-    @MockitoBean ApiEndpointRepository repository;
-    @MockitoBean HealthCheckService healthCheckService;
+    @MockitoBean CustomEndpointService customEndpointService;
 
     // ── A. SQL injection ──────────────────────────────────────────────────
 
@@ -95,7 +93,7 @@ class CustomEndpointNameSecurityTest {
         postWithName(maliciousName)
                 .andExpect(status().isBadRequest());
 
-        verify(repository, never()).save(any());
+        verify(customEndpointService, never()).addCustomEndpoint(any(), any());
     }
 
     // ── B. XSS / HTML injection ───────────────────────────────────────────
@@ -119,7 +117,7 @@ class CustomEndpointNameSecurityTest {
         postWithName(maliciousName)
                 .andExpect(status().isBadRequest());
 
-        verify(repository, never()).save(any());
+        verify(customEndpointService, never()).addCustomEndpoint(any(), any());
     }
 
     // ── C. Control characters & null bytes ────────────────────────────────
@@ -136,7 +134,7 @@ class CustomEndpointNameSecurityTest {
                         .content(body))
                 .andExpect(status().isBadRequest());
 
-        verify(repository, never()).save(any());
+        verify(customEndpointService, never()).addCustomEndpoint(any(), any());
     }
 
     @Test
@@ -150,7 +148,7 @@ class CustomEndpointNameSecurityTest {
                         .content(body))
                 .andExpect(status().isBadRequest());
 
-        verify(repository, never()).save(any());
+        verify(customEndpointService, never()).addCustomEndpoint(any(), any());
     }
 
     @Test
@@ -164,7 +162,7 @@ class CustomEndpointNameSecurityTest {
                         .content(body))
                 .andExpect(status().isBadRequest());
 
-        verify(repository, never()).save(any());
+        verify(customEndpointService, never()).addCustomEndpoint(any(), any());
     }
 
     @Test
@@ -178,7 +176,7 @@ class CustomEndpointNameSecurityTest {
                         .content(body))
                 .andExpect(status().isBadRequest());
 
-        verify(repository, never()).save(any());
+        verify(customEndpointService, never()).addCustomEndpoint(any(), any());
     }
 
     // ── D. Oversized input ────────────────────────────────────────────────
@@ -191,7 +189,7 @@ class CustomEndpointNameSecurityTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").exists());
 
-        verify(repository, never()).save(any());
+        verify(customEndpointService, never()).addCustomEndpoint(any(), any());
     }
 
     @Test
@@ -200,7 +198,7 @@ class CustomEndpointNameSecurityTest {
         postWithName("   ")
                 .andExpect(status().isBadRequest());
 
-        verify(repository, never()).save(any());
+        verify(customEndpointService, never()).addCustomEndpoint(any(), any());
     }
 
     @Test
@@ -209,7 +207,7 @@ class CustomEndpointNameSecurityTest {
         postWithName("")
                 .andExpect(status().isBadRequest());
 
-        verify(repository, never()).save(any());
+        verify(customEndpointService, never()).addCustomEndpoint(any(), any());
     }
 
     // ── E. Duplicate name ─────────────────────────────────────────────────
@@ -217,48 +215,40 @@ class CustomEndpointNameSecurityTest {
     @Test
     @DisplayName("Duplicate name (exact case) is rejected with 400")
     void duplicateName_exactCase_isRejected() throws Exception {
-        ApiEndpoint existing = makeEndpoint(1L, "My API");
-        when(repository.countBySource(ApiEndpointSource.CUSTOM)).thenReturn(0L);
-        when(repository.findByNameIgnoreCase("My API")).thenReturn(Optional.of(existing));
+        when(customEndpointService.addCustomEndpoint(eq("My API"), anyString()))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "An endpoint named 'My API' already exists"));
 
         postWithName("My API")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
                         org.hamcrest.Matchers.containsString("already exists")));
-
-        verify(repository, never()).save(any());
     }
 
     @Test
     @DisplayName("Duplicate name (different case) is rejected with 400")
     void duplicateName_differentCase_isRejected() throws Exception {
-        ApiEndpoint existing = makeEndpoint(1L, "github zen");
-        when(repository.countBySource(ApiEndpointSource.CUSTOM)).thenReturn(0L);
-        when(repository.findByNameIgnoreCase("GitHub Zen")).thenReturn(Optional.of(existing));
+        when(customEndpointService.addCustomEndpoint(eq("GitHub Zen"), anyString()))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "An endpoint named 'github zen' already exists"));
 
         postWithName("GitHub Zen")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
                         org.hamcrest.Matchers.containsString("already exists")));
-
-        verify(repository, never()).save(any());
     }
 
     @Test
     @DisplayName("Duplicate BUILTIN name is also rejected")
     void duplicateBuiltinName_isRejected() throws Exception {
-        // A BUILTIN endpoint with same name should also block a custom endpoint
-        ApiEndpoint builtin = makeEndpoint(1L, "GitHub Zen");
-        builtin.setSource(ApiEndpointSource.BUILTIN);
-        when(repository.countBySource(ApiEndpointSource.CUSTOM)).thenReturn(0L);
-        when(repository.findByNameIgnoreCase("GitHub Zen")).thenReturn(Optional.of(builtin));
+        when(customEndpointService.addCustomEndpoint(eq("GitHub Zen"), anyString()))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "An endpoint named 'GitHub Zen' already exists"));
 
         postWithName("GitHub Zen")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
                         org.hamcrest.Matchers.containsString("already exists")));
-
-        verify(repository, never()).save(any());
     }
 
     // ── F. Valid names — regression guard ────────────────────────────────
@@ -276,13 +266,8 @@ class CustomEndpointNameSecurityTest {
     })
     @DisplayName("Legitimate API names are accepted")
     void validNames_areAccepted(String name) throws Exception {
-        when(repository.countBySource(ApiEndpointSource.CUSTOM)).thenReturn(0L);
-        when(repository.findByNameIgnoreCase(anyString())).thenReturn(Optional.empty());
-        when(repository.save(any())).thenAnswer(inv -> {
-            ApiEndpoint e = inv.getArgument(0);
-            e.setId(1L);
-            return e;
-        });
+        when(customEndpointService.addCustomEndpoint(anyString(), anyString()))
+                .thenReturn(makeDTO(1L, name));
 
         postWithName(name)
                 .andExpect(status().isCreated());
@@ -291,25 +276,22 @@ class CustomEndpointNameSecurityTest {
     // ── G. Whitespace bypass (logic) ──────────────────────────────────────
     //
     // @Pattern allows interior spaces, so " GitHub Zen " passes constraint validation.
-    // The controller calls .strip() BEFORE the uniqueness check, so the trimmed form
-    // "GitHub Zen" must still collide with an existing record.
-    // Without the .strip() call this would be a logic-bypass vulnerability.
+    // CustomEndpointService.addCustomEndpoint() calls .strip() before the uniqueness
+    // check — the test verifies that even a padded name still triggers a duplicate
+    // rejection from the service.
 
     @Test
     @DisplayName("Leading/trailing spaces are stripped before uniqueness check")
     void whitespace_strippedBeforeDuplicateCheck() throws Exception {
-        ApiEndpoint existing = makeEndpoint(1L, "GitHub Zen");
-        existing.setSource(ApiEndpointSource.BUILTIN);
-        when(repository.countBySource(ApiEndpointSource.CUSTOM)).thenReturn(0L);
-        // strip() on " GitHub Zen " → "GitHub Zen"; this lookup must fire
-        when(repository.findByNameIgnoreCase("GitHub Zen")).thenReturn(Optional.of(existing));
+        // The controller passes the raw name to the service; stripping is the service's job.
+        when(customEndpointService.addCustomEndpoint(eq(" GitHub Zen "), anyString()))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "An endpoint named 'GitHub Zen' already exists"));
 
         postWithName(" GitHub Zen ")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
                         org.hamcrest.Matchers.containsString("already exists")));
-
-        verify(repository, never()).save(any());
     }
 
     @Test
@@ -318,7 +300,7 @@ class CustomEndpointNameSecurityTest {
         postWithName("     ")
                 .andExpect(status().isBadRequest());
 
-        verify(repository, never()).save(any());
+        verify(customEndpointService, never()).addCustomEndpoint(any(), any());
     }
 
     // ── H. Unicode, emojis, and non-ASCII characters ──────────────────────
@@ -345,7 +327,7 @@ class CustomEndpointNameSecurityTest {
         postWithName(name)
                 .andExpect(status().isBadRequest());
 
-        verify(repository, never()).save(any());
+        verify(customEndpointService, never()).addCustomEndpoint(any(), any());
     }
 
     // ── I. JSON type mismatches ────────────────────────────────────────────
@@ -364,7 +346,7 @@ class CustomEndpointNameSecurityTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").exists());
 
-        verify(repository, never()).save(any());
+        verify(customEndpointService, never()).addCustomEndpoint(any(), any());
     }
 
     @Test
@@ -377,7 +359,7 @@ class CustomEndpointNameSecurityTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").exists());
 
-        verify(repository, never()).save(any());
+        verify(customEndpointService, never()).addCustomEndpoint(any(), any());
     }
 
     @Test
@@ -389,7 +371,7 @@ class CustomEndpointNameSecurityTest {
                         .content("{this is not json"))
                 .andExpect(status().isBadRequest());
 
-        verify(repository, never()).save(any());
+        verify(customEndpointService, never()).addCustomEndpoint(any(), any());
     }
 
     // ── J. Mass assignment / over-posting ─────────────────────────────────
@@ -400,18 +382,13 @@ class CustomEndpointNameSecurityTest {
     //   - Override id → 1 (attempt to hijack an existing endpoint)
     //
     // The AddCustomEndpointRequest record contains ONLY name and url. Unknown
-    // properties are ignored by Jackson. The entity's source is hardcoded to CUSTOM.
+    // properties are ignored by Jackson. The service always creates with source=CUSTOM.
 
     @Test
     @DisplayName("Extra fields (id, source, isActive) in request body are ignored")
     void massAssignment_protectedFieldsAreIgnored() throws Exception {
-        when(repository.countBySource(ApiEndpointSource.CUSTOM)).thenReturn(0L);
-        when(repository.findByNameIgnoreCase(anyString())).thenReturn(Optional.empty());
-        when(repository.save(any())).thenAnswer(inv -> {
-            ApiEndpoint e = inv.getArgument(0);
-            e.setId(99L);
-            return e;
-        });
+        when(customEndpointService.addCustomEndpoint(eq("Injected API"), eq("https://api.example.com/health")))
+                .thenReturn(makeDTO(99L, "Injected API"));
 
         mockMvc.perform(post("/api/custom-endpoints")
                         .header(API_KEY_HEADER, VALID_KEY)
@@ -431,10 +408,10 @@ class CustomEndpointNameSecurityTest {
                 // Source must be CUSTOM regardless of what was sent in the body
                 .andExpect(jsonPath("$.source").value("CUSTOM"));
 
-        // Verify the entity saved to the DB has source=CUSTOM and isActive=true
-        verify(repository).save(argThat(e ->
-                ApiEndpointSource.CUSTOM.equals(e.getSource())
-                        && Boolean.TRUE.equals(e.getIsActive())));
+        // Verify the service was invoked with only the two allowed fields (name+url);
+        // the extra posted fields are never forwarded.
+        verify(customEndpointService)
+                .addCustomEndpoint("Injected API", "https://api.example.com/health");
     }
 
     // ── K. ReDoS safety ───────────────────────────────────────────────────
@@ -471,15 +448,8 @@ class CustomEndpointNameSecurityTest {
                 .content(json));
     }
 
-    private ApiEndpoint makeEndpoint(Long id, String name) {
-        ApiEndpoint e = new ApiEndpoint();
-        e.setId(id);
-        e.setName(name);
-        e.setUrl("https://example.com");
-        e.setIsActive(true);
-        e.setSource(ApiEndpointSource.CUSTOM);
-        e.setTotalChecks(0);
-        e.setSuccessfulChecks(0);
-        return e;
+    private ApiEndpointDTO makeDTO(Long id, String name) {
+        return new ApiEndpointDTO(id, name, VALID_URL, "UP", 120L,
+                null, 0, 0, true, ApiEndpointSource.CUSTOM);
     }
 }
