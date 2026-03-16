@@ -1,4 +1,4 @@
-# API Health Monitor
+# API Monitor
 
 A Spring Boot application that monitors the availability and latency of external API endpoints in real time. A scheduled background service checks each active endpoint on a configurable interval and persists results to a database. A dark-themed React SPA polls the backend every 10 seconds to display live status cards and a latency leaderboard.
 
