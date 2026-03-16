@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { ApiEndpoint } from '../types'
@@ -23,6 +24,11 @@ export default function MonitorCard({ api, onRemove }: Props) {
     transition,
   }
 
+  const wasDraggedRef = useRef(false)
+  useEffect(() => {
+    if (isDragging) wasDraggedRef.current = true
+  }, [isDragging])
+
   const uptime =
     api.totalChecks > 0
       ? ((api.successfulChecks / api.totalChecks) * 100).toFixed(2)
@@ -36,10 +42,17 @@ export default function MonitorCard({ api, onRemove }: Props) {
     <div
       ref={setNodeRef}
       style={style}
-      className={`group relative bg-card border border-line rounded-xl p-6 cursor-grab transition-shadow
+      className={`group relative bg-card border border-line rounded-xl p-6 select-none cursor-grab transition-shadow
         ${isDragging ? 'opacity-40 shadow-none' : 'hover:shadow-[0_0_15px_#262626]'}`}
       {...attributes}
       {...listeners}
+      onClick={() => {
+        if (wasDraggedRef.current) {
+          wasDraggedRef.current = false
+          return
+        }
+        window.open(api.url, '_blank', 'noopener,noreferrer')
+      }}
     >
       {/* Card header */}
       <div className="flex justify-between items-start mb-4 gap-2">
@@ -48,8 +61,9 @@ export default function MonitorCard({ api, onRemove }: Props) {
             href={api.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-neutral-100 hover:underline break-words"
+            className="text-neutral-100 break-words"
             onPointerDown={e => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
           >
             {api.name}
           </a>
@@ -60,18 +74,18 @@ export default function MonitorCard({ api, onRemove }: Props) {
             </span>
           )}
         </div>
-        
+
         {/* Flex wrapper for the badge and the button */}
         <div className="flex items-center gap-2 -mr-2">
           <StatusBadge status={api.currentStatus} />
-          {/* Remove button — appears on hover */}
+          {/* Remove button — appears on hover; stops propagation so it doesn't also open the URL */}
           <button
             className="w-6 h-6 rounded-full bg-white/10 text-muted
               opacity-0 group-hover:opacity-100 transition-opacity hover:bg-down hover:text-white
               flex items-center justify-center text-base leading-none shrink-0"
             title="Remove from tracker"
             onPointerDown={e => e.stopPropagation()}
-            onClick={() => onRemove(api.id)}
+            onClick={(e) => { e.stopPropagation(); onRemove(api.id) }}
           >
             ×
           </button>
