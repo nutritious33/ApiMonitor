@@ -20,7 +20,7 @@ public class DataLoader implements CommandLineRunner {
     private static final Logger log = LoggerFactory.getLogger(DataLoader.class);
 
     /** Lightweight projection for deserialising endpoints.json */
-    record EndpointConfig(String name, String url, boolean active) {}
+    record EndpointConfig(String name, String url, boolean active) { }
 
     private final ApiEndpointRepository apiEndpointRepository;
     private final HealthCheckService healthCheckService;
