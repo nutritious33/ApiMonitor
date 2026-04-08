@@ -13,8 +13,6 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
-import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
-import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.web.header.writers.StaticHeadersWriter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -54,7 +52,7 @@ public class SecurityConfig {
             // X-API-Key endpoints are CSRF-exempt — custom headers are inherently CSRF-safe.
             .csrf(csrf -> csrf
                     .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                    .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+                    .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler())
                     .ignoringRequestMatchers(
                             "/api/health-metrics/**",
                             "/api/submissions/**",
@@ -69,10 +67,6 @@ public class SecurityConfig {
             // Authenticate via X-API-Key header or admin_session cookie
             .addFilterBefore(new ApiKeyAuthFilter(apiKey, adminSessionStore),
                     UsernamePasswordAuthenticationFilter.class)
-            // Eagerly resolve the deferred CSRF token so XSRF-TOKEN cookie is set on every
-            // response (not just on validated POSTs). Required for SPA login flow to work
-            // on first attempt — without this the first POST /api/auth/ping gets 403.
-            .addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> {
                 auth.requestMatchers(HttpMethod.GET, "/api/health-metrics").permitAll();
                 auth.requestMatchers(HttpMethod.POST, "/api/health-metrics/activate/*").permitAll();

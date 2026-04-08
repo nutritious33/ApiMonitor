@@ -1,25 +1,15 @@
 # ── Secrets ────────────────────────────────────────────────────────────────────
-# Prevent local .env files with real credentials from being sent to the Docker
-# daemon as part of the build context. The Dockerfile only COPYs pom.xml, src/,
-# and frontend/ — but without this file ALL of api-monitor/ would be transferred.
 .env
 *.env
 
 # ── Maven build output ─────────────────────────────────────────────────────────
 target/
-# Exclude any pre-built frontend bundle. Vite always re-builds inside Docker and
-# writes a fresh bundle (with the correct VITE_API_KEY) to src/main/resources/static/.
-# Including a stale bundle here would cause Maven's process-resources phase to
-# copy it to target/classes/ BEFORE Vite runs, making the JAR ship the wrong key.
 src/main/resources/static/
 
 # ── Node / frontend ────────────────────────────────────────────────────────────
 frontend/node_modules/
 frontend/dist/
-# Exclude all frontend .env files — they carry local-dev keys and would
-# override the VITE_API_KEY build-arg injected by docker compose / CI.
 frontend/.env*
-# frontend-maven-plugin downloads Node here
 node/
 
 # ── Misc ───────────────────────────────────────────────────────────────────────

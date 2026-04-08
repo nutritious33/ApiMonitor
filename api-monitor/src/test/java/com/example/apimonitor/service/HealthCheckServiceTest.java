@@ -2,7 +2,6 @@ package com.example.apimonitor.service;
 
 import com.example.apimonitor.entity.ApiEndpoint;
 import com.example.apimonitor.repository.ApiEndpointRepository;
-import com.example.apimonitor.service.HealthCheckService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
