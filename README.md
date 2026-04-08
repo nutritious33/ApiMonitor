@@ -76,7 +76,7 @@ The application uses a tiered permission model — most read and watchlist actio
 
 ## API Reference
 
-All endpoints are relative to the server root (e.g. `http://localhost:8080`).
+All endpoints are relative to the server root
 
 ### Health metrics
 
@@ -175,10 +175,10 @@ Email notifications are entirely optional. If `MAIL_HOST` or `MAIL_TO` is blank 
 
 ## CI / CD
 
-GitHub Actions runs on every push and pull request targeting `main` or `master`:
+GitHub Actions runs on every push and pull request targeting `main`:
 
 1. **Run tests** — `mvn -B test` against the `test` profile (H2 in-memory)
-2. **Docker build** — multi-stage build compiles the JAR and React bundle inside Docker; no secrets are baked into the image
+2. **Docker build** — multi-stage build compiles the JAR and React bundle inside Docker
 3. **Upload Surefire reports** — test results are uploaded as a workflow artifact on every run
 
 ---
