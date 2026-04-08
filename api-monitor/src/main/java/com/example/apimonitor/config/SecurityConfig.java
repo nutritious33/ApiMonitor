@@ -13,6 +13,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.web.header.writers.StaticHeadersWriter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -67,6 +68,7 @@ public class SecurityConfig {
             // Authenticate via X-API-Key header or admin_session cookie
             .addFilterBefore(new ApiKeyAuthFilter(apiKey, adminSessionStore),
                     UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
             .authorizeHttpRequests(auth -> {
                 auth.requestMatchers(HttpMethod.GET, "/api/health-metrics").permitAll();
                 auth.requestMatchers(HttpMethod.POST, "/api/health-metrics/activate/*").permitAll();
