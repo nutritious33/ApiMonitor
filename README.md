@@ -24,7 +24,7 @@ A Spring Boot application that monitors the availability and latency of external
 
 | Layer | Technology |
 |-------|------------|
-| Backend | Java 17, Spring Boot 3.5, Spring WebFlux (WebClient), Spring Data JPA |
+| Backend | Java 21, Spring Boot 3.5, Spring WebFlux (WebClient), Spring Data JPA |
 | Database (dev/test) | H2 (in-memory) |
 | Database (prod) | PostgreSQL |
 | Schema migrations | Flyway |

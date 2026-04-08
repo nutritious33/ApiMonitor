@@ -1,6 +1,6 @@
 # ── Stage 1: Build ────────────────────────────────────────────────────────────
 # Full JDK + Maven image; this stage never ships to production.
-FROM maven:3.9-eclipse-temurin-17 AS builder
+FROM maven:3.9-eclipse-temurin-21 AS builder
 
 WORKDIR /build
 
@@ -16,7 +16,7 @@ RUN mvn package -DskipTests --no-transfer-progress
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 # JRE-only image 
-FROM eclipse-temurin:17-jre-jammy
+FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
 
