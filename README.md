@@ -16,7 +16,7 @@ A Spring Boot application that monitors the availability and latency of external
 - **Admin login UI** — lock-icon button in the header; validates the API key server-side and issues an httpOnly session cookie
 - **Email notifications** — optional SMTP integration notifies the admin when a new public submission arrives
 - **Docker-first deployment** — single multi-stage `Dockerfile`; `docker-compose.yml` for local or self-hosted use
-- **CI pipeline** — GitHub Actions builds and tests on every push to `main`/`master`
+- **CI pipeline** — GitHub Actions builds and tests on every push to `main`
 
 ---
 
