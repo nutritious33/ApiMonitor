@@ -20,7 +20,7 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: maven
+          # cache: maven
 
       - name: Run tests (backend only — frontend build skipped for speed)
         run: mvn -B test --no-transfer-progress
