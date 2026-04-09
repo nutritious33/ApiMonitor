@@ -38,8 +38,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 @TestPropertySource(properties = {
     "api.security.key=test-api-key",
-    "test.csrf-cookie-isolation=true"
-})
+    "test.csrf-cookie-isolation=true" // isolate SecurityConfigCsrfTest context to prevent csrf() 
+})                                    // post-processor from mutating CookieCsrfTokenRepository
 class SecurityConfigCsrfTest {
 
     @Autowired MockMvc mockMvc;
