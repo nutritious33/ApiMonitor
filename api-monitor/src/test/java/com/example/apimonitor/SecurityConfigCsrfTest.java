@@ -36,7 +36,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(AuthController.class)
 @Import(SecurityConfig.class)
 @ActiveProfiles("test")
-@TestPropertySource(properties = "api.security.key=test-api-key")
+@TestPropertySource(properties = {
+    "api.security.key=test-api-key",
+    "test.csrf-cookie-isolation=true"
+})
 class SecurityConfigCsrfTest {
 
     @Autowired MockMvc mockMvc;
